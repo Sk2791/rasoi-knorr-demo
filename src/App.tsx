@@ -14,6 +14,7 @@ import { LoginPage } from "./components/LoginPage";
 import { HomeDashboard } from "./components/HomeDashboard";
 import { TriggerReviewModal } from "./components/TriggerReviewModal";
 import { RunSummaryScreen } from "./components/RunSummaryScreen";
+import { VariantPicker } from "./components/VariantPicker";
 
 import {
   Trigger,
@@ -26,6 +27,8 @@ import {
   TriggerRecord,
   BannerRecord,
   AppNotification,
+  CreativeVariant,
+  UserRole,
 } from "./types";
 import { CLUSTERS, AGENTS, GUARDS, ASSETS } from "./data/mockData";
 import { deriveEventTheme } from "./lib/theme";
@@ -33,6 +36,20 @@ import { Code2, RefreshCw } from "lucide-react";
 
 const SESSION_NAME_KEY = "rasoi_user_name";
 const SESSION_ROLE_KEY = "rasoi_user_role";
+const SESSION_ACTIVE_ROLE_KEY = "rasoi_active_role";
+
+async function postJSON(url: string, body: unknown): Promise<any> {
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    return await res.json();
+  } catch (err) {
+    return { success: false };
+  }
+}
 
 const EMPTY_TRIGGER: TriggerRecord = {
   id: "",
@@ -60,6 +77,16 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>("login");
   const [userName, setUserName] = useState<string>("");
   const [userRole, setUserRole] = useState<string>("");
+  // Which persona the signed-in person is currently acting as — a lightweight
+  // stand-in for real multi-user RBAC so the same demo user can play both
+  // sides of the Brand Manager -> Regional Marketing Lead approval chain.
+  const [activeRole, setActiveRole] = useState<UserRole>(
+    () => (sessionStorage.getItem(SESSION_ACTIVE_ROLE_KEY) as UserRole) || "Brand Manager"
+  );
+  const handleSwitchRole = (role: UserRole) => {
+    sessionStorage.setItem(SESSION_ACTIVE_ROLE_KEY, role);
+    setActiveRole(role);
+  };
 
   // -------------------------------------------------------------------
   // Persisted trigger queue + banners (from the SQLite-backed API)
@@ -170,6 +197,17 @@ export default function App() {
   const [currentAssets, setCurrentAssets] = useState<Asset[]>(ASSETS);
   const [kpiTriples, setKpiTriples] = useState<Array<[string, string, string]>>([]);
 
+  // Populated once MAKER returns multiple creative directions — the run
+  // pipeline pauses here (compliance scan hasn't run yet) until the brand
+  // manager picks one via handleSelectVariant.
+  const [variantOptions, setVariantOptions] = useState<CreativeVariant[] | null>(null);
+  const [pendingCreativeContext, setPendingCreativeContext] = useState<{
+    verdict: string;
+    kpis: Array<[string, string, string]>;
+    providers: string[];
+    anyFallback: boolean;
+  } | null>(null);
+
   const activeTrigger: TriggerRecord =
     triggerRecords.find((t) => t.id === currentTriggerId) || EMPTY_TRIGGER;
   const targetMinutes = activeTrigger.targetMin || 47;
@@ -208,10 +246,12 @@ export default function App() {
     return () => stopAllTimers();
   }, []);
 
-  // Update panel defaults when the trigger under review changes (but not right
-  // after a run completes — that would clobber the live results)
+  // Update panel defaults when the trigger under review changes (but not
+  // right after a run completes, and not while a Sentinel claim is held for
+  // review — either would clobber the live-generated results the brand
+  // manager is currently looking at with the trigger's static preset data).
   useEffect(() => {
-    if (!isRunning && !isCompleted && currentTriggerId) {
+    if (!isRunning && !isCompleted && !isGateActive && currentTriggerId) {
       setSignals(activeTrigger.signals || []);
       setMeshMetrics(activeTrigger.mesh as [string, string, string] || ["8,700/min", "14 of 14", "19 active feeds"]);
       setSparkPoints([20, 35, 30, 50, 45, 70, 85, 95]);
@@ -223,7 +263,7 @@ export default function App() {
         setKpiTriples(activeTrigger.kpis);
       }
     }
-  }, [currentTriggerId, isRunning, isCompleted]);
+  }, [currentTriggerId, isRunning, isCompleted, isGateActive]);
 
   // Auto-start the pipeline the moment we land on the Run screen for a trigger
   useEffect(() => {
@@ -307,6 +347,8 @@ export default function App() {
     setGuardrails(GUARDS.map((g) => ({ label: g[0], status: g[1], note: g[2] })));
     setAssetQuotes({});
     setCurrentAssets(activeTrigger.assets || ASSETS);
+    setVariantOptions(null);
+    setPendingCreativeContext(null);
 
     if (activeTrigger.kpis?.length) {
       setKpiValues(activeTrigger.kpis.map((k) => k[0]));
@@ -337,7 +379,9 @@ export default function App() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          status: "approved",
+          // Cleared by the Brand Manager, but not fully live until a
+          // Regional Marketing Lead signs off — see handleFinalApprove.
+          status: "pending_regional_approval",
           approvedBy: userName,
           runResult: payload,
         }),
@@ -346,7 +390,7 @@ export default function App() {
       if (data.success && data.trigger) {
         setSummaryTrigger(data.trigger);
         setTriggerRecords((prev) => prev.map((t) => (t.id === currentTriggerId ? data.trigger : t)));
-        pushNotification(`Campaign confirmed: ${data.trigger.name}`);
+        pushNotification(`Campaign ready for regional sign-off: ${data.trigger.name}`);
       }
     } catch (err) {
       console.warn("Failed to finalize trigger", err);
@@ -383,6 +427,95 @@ export default function App() {
     }
   };
 
+  // Steps after the brand manager has a final asset set in hand (either
+  // picked from MAKER's variants, or the single cached fallback set) — runs
+  // the compliance scan and finalizes the trigger. Split out from
+  // handleRunSimulation so handleSelectVariant can resume the pipeline here
+  // after a pause for the variant-choice step.
+  const runSentinelAndFinalize = async (
+    finalAssets: Asset[],
+    finalVerdict: string,
+    finalKpis: Array<[string, string, string]>,
+    providersUsed: Set<string>,
+    anyFallback: boolean
+  ) => {
+    setCurrentAssets(finalAssets);
+
+    // Step 4: SENTINEL — deterministic compliance scan + generative remediation
+    setAgentStates((p) => ({ ...p, sentinel: "running" }));
+    addLog("SENTINEL: Scanning generated regional creative against FSSAI Advertising & Claims Regulations 2018...");
+
+    const sentinelRes = await postJSON("/api/pipeline/sentinel", { assets: finalAssets });
+    if (isKilledRef.current) return;
+
+    if (sentinelRes.provider) providersUsed.add(sentinelRes.provider);
+    const finalProviderLabel = providersUsed.size
+      ? Array.from(providersUsed)
+          .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+          .join(" + ")
+      : null;
+    setLiveModeStatus(anyFallback ? "fallback" : "live");
+    setProviderLabel(finalProviderLabel);
+
+    if (sentinelRes.success && sentinelRes.flagged) {
+      const claim: FlaggedClaim = {
+        assetCode: sentinelRes.assetCode,
+        city: sentinelRes.city,
+        originalHead: sentinelRes.originalHead,
+        originalSub: sentinelRes.originalSub,
+        originalEnglish: sentinelRes.originalEnglish,
+        claimQuoted: sentinelRes.claimQuoted,
+        regulationCite: sentinelRes.regulationCite,
+        rationale: sentinelRes.rationale,
+        suggestedRewrite: sentinelRes.suggestedRewrite,
+      };
+      setFlaggedClaim(claim);
+      setCurrentAssets((prev) =>
+        prev.map((a) => (a.c === claim.assetCode ? { ...a, held: 1 } : a))
+      );
+      setAgentStates((p) => ({ ...p, sentinel: "gate" }));
+      setIsRunning(false);
+      setIsGateActive(true);
+      setGateMessage(
+        `${claim.city} ad held — flagged claim requires brand manager sign-off under FSSAI 2018 regulations.`
+      );
+      addLog(`SENTINEL: Flagged unverified claim ("${claim.claimQuoted}") on ${claim.city} asset. Quarantined for brand review.`);
+      setIsSentinelModalOpen(true);
+    } else {
+      addLog("SENTINEL: No regulated claims detected across generated assets. All versions cleared for launch.");
+      setAgentStates((p) => ({ ...p, sentinel: "done" }));
+      setAgentTimes((p) => ({ ...p, sentinel: getTS() }));
+
+      const newClusterStates: Record<number, "on" | "hold"> = {};
+      CLUSTERS.forEach((_, idx) => {
+        newClusterStates[idx] = "on";
+      });
+      setClusterStates(newClusterStates);
+
+      setIsRunning(false);
+      setIsCompleted(true);
+      if (timerRef.current) clearInterval(timerRef.current);
+
+      finalizeTrigger({
+        verdict: finalVerdict,
+        kpis: finalKpis,
+        assets: finalAssets,
+        provider: finalProviderLabel,
+      });
+    }
+  };
+
+  // Brand manager picks one of MAKER's proposed creative directions — resumes
+  // the paused pipeline straight into the compliance scan.
+  const handleSelectVariant = (variant: CreativeVariant) => {
+    if (!pendingCreativeContext) return;
+    const { verdict, kpis, providers, anyFallback } = pendingCreativeContext;
+    setVariantOptions(null);
+    setPendingCreativeContext(null);
+    addLog(`BRAND MANAGER: Selected "${variant.angle}" creative direction — proceeding to compliance scan.`);
+    runSentinelAndFinalize(variant.assets, verdict, kpis, new Set(providers), anyFallback);
+  };
+
   const handleRunSimulation = async () => {
     handleReset();
     isKilledRef.current = false;
@@ -402,19 +535,6 @@ export default function App() {
         setTimeout(() => setToastMessage(null), 5000);
       }
       anyFallback = true;
-    };
-
-    const postJSON = async (url: string, body: unknown): Promise<any> => {
-      try {
-        const res = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        return await res.json();
-      } catch (err) {
-        return { success: false };
-      }
     };
 
     // Step 1: SCOUT (live signal ingestion)
@@ -493,107 +613,62 @@ export default function App() {
       opp: liveOpp,
       scores: liveScores,
       affectedClusters,
+      variantCount: 3,
     });
     if (isKilledRef.current) return;
 
-    const liveAssets: Asset[] | undefined = creativeRes.success ? creativeRes.data?.assets : undefined;
+    const liveVariants: CreativeVariant[] | undefined = creativeRes.success ? creativeRes.data?.variants : undefined;
     const liveVerdict: string | undefined = creativeRes.success ? creativeRes.data?.verdict : undefined;
     const liveKpis: Array<[string, string, string]> | undefined = creativeRes.success ? creativeRes.data?.kpis : undefined;
 
-    let finalAssets: Asset[];
-    let finalVerdict: string;
-    let finalKpis: Array<[string, string, string]>;
-    if (liveAssets?.length) {
-      finalAssets = liveAssets;
-      finalVerdict = liveVerdict || "High predicted category offtake across target geographies.";
-      finalKpis = liveKpis || activeTrigger.kpis || [];
+    const usableVariants =
+      Array.isArray(liveVariants) && liveVariants.length > 1 && liveVariants.every((v) => v.assets?.length)
+        ? liveVariants
+        : null;
+
+    if (usableVariants) {
+      if (creativeRes.provider) providersUsed.add(creativeRes.provider);
+      const finalVerdict = liveVerdict || "High predicted category offtake across target geographies.";
+      const finalKpis = liveKpis || activeTrigger.kpis || [];
       setVerdictText(finalVerdict);
-      setCurrentAssets(finalAssets);
       setKpiValues(finalKpis.map((k) => k[0]));
       setKpiTriples(finalKpis);
-      if (creativeRes.provider) providersUsed.add(creativeRes.provider);
       addLog("ECHO & BHASHA: Consumer reactions simulated & regional copy localized live.");
-      addLog("MAKER & COMMERCE: Regional digital pack twins rendered live & quick-commerce routing armed.");
-    } else {
-      notifyFallback();
-      finalAssets = activeTrigger.assets || ASSETS;
-      finalVerdict = activeTrigger.verdict || "High predicted category offtake across target geographies.";
-      finalKpis = activeTrigger.kpis || [];
-      setVerdictText(finalVerdict);
-      setCurrentAssets(finalAssets);
-      if (finalKpis.length) {
-        setKpiValues(finalKpis.map((k) => k[0]));
-        setKpiTriples(finalKpis);
-      }
-      addLog("MAKER: Live creative generation unavailable — using cached regional assets.");
+      addLog(`MAKER & COMMERCE: ${usableVariants.length} regional creative directions rendered — awaiting brand manager pick.`);
+      setShowAssets(true);
+      setSimProgressStep(4);
+      setAgentStates((p) => ({ ...p, echo: "done", bhasha: "done", maker: "gate", commerce: "done" }));
+      setAgentTimes((p) => ({ ...p, echo: getTS(), bhasha: getTS(), commerce: getTS() }));
+
+      setVariantOptions(usableVariants);
+      setPendingCreativeContext({
+        verdict: finalVerdict,
+        kpis: finalKpis,
+        providers: Array.from(providersUsed),
+        anyFallback,
+      });
+      // Pipeline pauses here — handleSelectVariant resumes it with the
+      // compliance scan once the brand manager picks a direction.
+      return;
     }
+
+    notifyFallback();
+    const finalAssets = activeTrigger.assets || ASSETS;
+    const finalVerdict = activeTrigger.verdict || "High predicted category offtake across target geographies.";
+    const finalKpis = activeTrigger.kpis || [];
+    setVerdictText(finalVerdict);
+    setCurrentAssets(finalAssets);
+    if (finalKpis.length) {
+      setKpiValues(finalKpis.map((k) => k[0]));
+      setKpiTriples(finalKpis);
+    }
+    addLog("MAKER: Live creative generation unavailable — using cached regional assets.");
     setShowAssets(true);
     setSimProgressStep(4);
     setAgentStates((p) => ({ ...p, echo: "done", bhasha: "done", maker: "done", commerce: "done" }));
     setAgentTimes((p) => ({ ...p, echo: getTS(), bhasha: getTS(), maker: getTS(), commerce: getTS() }));
 
-    // Step 4: SENTINEL — deterministic compliance scan + generative remediation
-    setAgentStates((p) => ({ ...p, sentinel: "running" }));
-    addLog("SENTINEL: Scanning generated regional creative against FSSAI Advertising & Claims Regulations 2018...");
-
-    const sentinelRes = await postJSON("/api/pipeline/sentinel", { assets: finalAssets });
-    if (isKilledRef.current) return;
-
-    if (sentinelRes.provider) providersUsed.add(sentinelRes.provider);
-    const finalProviderLabel = providersUsed.size
-      ? Array.from(providersUsed)
-          .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
-          .join(" + ")
-      : null;
-    setLiveModeStatus(anyFallback ? "fallback" : "live");
-    setProviderLabel(finalProviderLabel);
-
-    if (sentinelRes.success && sentinelRes.flagged) {
-      const claim: FlaggedClaim = {
-        assetCode: sentinelRes.assetCode,
-        city: sentinelRes.city,
-        originalHead: sentinelRes.originalHead,
-        originalSub: sentinelRes.originalSub,
-        originalEnglish: sentinelRes.originalEnglish,
-        claimQuoted: sentinelRes.claimQuoted,
-        regulationCite: sentinelRes.regulationCite,
-        rationale: sentinelRes.rationale,
-        suggestedRewrite: sentinelRes.suggestedRewrite,
-      };
-      setFlaggedClaim(claim);
-      setCurrentAssets((prev) =>
-        prev.map((a) => (a.c === claim.assetCode ? { ...a, held: 1 } : a))
-      );
-      setAgentStates((p) => ({ ...p, sentinel: "gate" }));
-      setIsRunning(false);
-      setIsGateActive(true);
-      setGateMessage(
-        `${claim.city} ad held — flagged claim requires brand manager sign-off under FSSAI 2018 regulations.`
-      );
-      addLog(`SENTINEL: Flagged unverified claim ("${claim.claimQuoted}") on ${claim.city} asset. Quarantined for brand review.`);
-      setIsSentinelModalOpen(true);
-    } else {
-      addLog("SENTINEL: No regulated claims detected across generated assets. All versions cleared for launch.");
-      setAgentStates((p) => ({ ...p, sentinel: "done" }));
-      setAgentTimes((p) => ({ ...p, sentinel: getTS() }));
-
-      const newClusterStates: Record<number, "on" | "hold"> = {};
-      CLUSTERS.forEach((_, idx) => {
-        newClusterStates[idx] = "on";
-      });
-      setClusterStates(newClusterStates);
-
-      setIsRunning(false);
-      setIsCompleted(true);
-      if (timerRef.current) clearInterval(timerRef.current);
-
-      finalizeTrigger({
-        verdict: finalVerdict,
-        kpis: finalKpis,
-        assets: finalAssets,
-        provider: finalProviderLabel,
-      });
-    }
+    await runSentinelAndFinalize(finalAssets, finalVerdict, finalKpis, providersUsed, anyFallback);
   };
 
   // Brand Manager resolves the held claim
@@ -710,6 +785,22 @@ export default function App() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
+  // Second half of the approval chain — a Regional Marketing Lead either
+  // signs the campaign off (goes fully live, counted in History/KPIs) or
+  // sends it back (rejected, same as a Sentinel-held claim being rejected).
+  const handleFinalApprove = async (id: string) => {
+    const trigger = triggerRecords.find((t) => t.id === id);
+    await patchTriggerStatus(id, "approved");
+    await refreshBanners();
+    pushNotification(`Regional sign-off complete: ${trigger?.name || "Campaign"} is now live.`);
+  };
+
+  const handleSendBack = async (id: string) => {
+    const trigger = triggerRecords.find((t) => t.id === id);
+    await patchTriggerStatus(id, "cancelled");
+    pushNotification(`Sent back by Regional Marketing Lead: ${trigger?.name || "Campaign"}.`);
+  };
+
   const handleBackToHomeFromSummary = () => {
     setCurrentTriggerId(null);
     setSummaryTrigger(null);
@@ -742,6 +833,10 @@ export default function App() {
           onTriggersRefresh={refreshTriggers}
           notifications={notifications}
           onNotify={pushNotification}
+          activeRole={activeRole}
+          onSwitchRole={handleSwitchRole}
+          onFinalApprove={handleFinalApprove}
+          onSendBack={handleSendBack}
         />
         <TriggerReviewModal
           trigger={reviewingTrigger}
@@ -802,7 +897,9 @@ export default function App() {
               providerLabel={providerLabel}
             />
 
-            {isRunning ? (
+            {variantOptions ? (
+              <VariantPicker variants={variantOptions} eventTheme={eventTheme} onSelect={handleSelectVariant} />
+            ) : isRunning ? (
               <div className="border border-slate-800 rounded-3xl bg-slate-900/40 p-10 flex flex-col items-center justify-center gap-3 text-center mb-6">
                 <RefreshCw className="w-6 h-6 text-orange-400 animate-spin" />
                 <div className="text-sm font-bold text-white">Generating regional banners...</div>
@@ -877,7 +974,9 @@ export default function App() {
               />
             </main>
 
-            {isRunning ? (
+            {variantOptions ? (
+              <VariantPicker variants={variantOptions} eventTheme={eventTheme} onSelect={handleSelectVariant} />
+            ) : isRunning ? (
               <div className="border border-slate-800 rounded-3xl bg-slate-900/40 p-10 flex flex-col items-center justify-center gap-3 text-center mb-6">
                 <RefreshCw className="w-6 h-6 text-orange-400 animate-spin" />
                 <div className="text-sm font-bold text-white">Generating regional banners...</div>

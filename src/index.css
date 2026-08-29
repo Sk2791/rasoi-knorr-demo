@@ -66,3 +66,34 @@
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(249, 115, 22, 0.6);
 }
+
+/* ROI Report print output — isolates #roi-print-area and flips it to a
+   plain black-on-white page so "Print / Save as PDF" produces something a
+   CFO can actually read, instead of the dark app chrome. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #roi-print-area,
+  #roi-print-area * {
+    visibility: visible;
+    color: #000 !important;
+    background: transparent !important;
+    border-color: #ccc !important;
+    box-shadow: none !important;
+  }
+  #roi-print-area {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  .roi-print-hide {
+    display: none !important;
+  }
+  .roi-print-only {
+    display: block !important;
+  }
+}

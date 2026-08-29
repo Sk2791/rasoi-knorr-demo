@@ -94,7 +94,11 @@ app.post("/api/demo/reset", (req, res) => {
     if (!existing) {
       insert.run(key, "pending", now, now, JSON.stringify(trigger));
       restocked++;
-    } else if (existing.status === "approved" || existing.status === "cancelled") {
+    } else if (
+      existing.status === "approved" ||
+      existing.status === "cancelled" ||
+      existing.status === "pending_regional_approval"
+    ) {
       const freshId = `${key}_reset_${Date.now()}_${idx}`;
       insert.run(freshId, "pending", now, now, JSON.stringify(trigger));
       restocked++;
@@ -344,7 +348,14 @@ app.patch("/api/triggers/:id", (req, res) => {
 
   const newStatus = status || existingRow.status;
 
-  if (newStatus === "approved" && data.runResult && !data.expectedBenefit) {
+  // expectedBenefit is computed the first time a run result clears — whether
+  // that's a full approval or just reaching the regional-lead sign-off queue
+  // — so the queue can already show projected impact ahead of final sign-off.
+  if (
+    (newStatus === "approved" || newStatus === "pending_regional_approval") &&
+    data.runResult &&
+    !data.expectedBenefit
+  ) {
     const assets = (data.runResult.assets || []).map((a: any) => ({
       ...a,
       orderCount: Math.round(400 + Math.random() * 2600),
@@ -870,10 +881,15 @@ Generate a structured JSON object with:
 
 // API: ECHO + MAKER + BHASHA + COMMERCE — consumer verdict, regional creative & reach
 app.post("/api/pipeline/creative", async (req, res) => {
-  const { eventDescription, region, opp, scores, affectedClusters } = req.body;
+  const { eventDescription, region, opp, scores, affectedClusters, variantCount } = req.body;
   if (!eventDescription) {
     return res.status(400).json({ error: "Event description is required" });
   }
+
+  // Brand manager picks between 2-3 distinct creative directions instead of
+  // the pipeline committing to one AI guess — capped at 3 to keep the single
+  // JSON response (and the review UI) manageable.
+  const numVariants = Math.min(Math.max(parseInt(variantCount, 10) || 1, 1), 3);
 
   // Use the geography-validated clusters SCOUT determined for this event; fall back
   // to a random 5 only if that stage didn't come back with anything usable.
@@ -891,6 +907,15 @@ app.post("/api/pipeline/creative", async (req, res) => {
     .map((cl) => `- Code "${cl.c}" — ${cl.n}, language ${cl.lang}. Local taste cue: ${cl.tasteSummary || cl.note}.`)
     .join("\n");
 
+  const assetShape = `{ c: string (the exact cluster code given above), city: string (a real specific city within that cluster), lang: string (the exact language given above, e.g. "Hindi (hi-IN)"), fmt: string (ad format e.g. "1:1 Quick Feed", "9:16 Reel"), head: string (headline written IN the local language/script), sub: string (subheading in local language), badge: string (short status badge text), q: string (price like "₹ 55"), englishMeaning: string (REQUIRED plain-English gloss of head+sub), tasteNote: string (1 short sentence on the regional taste adaptation, using the local taste cue given above) }`;
+
+  const groundingParagraph = `Ground each asset in something SPECIFIC to that exact place and to this exact trigger event — a real local landmark, a region-specific SPICE or FLAVOR habit, or a concrete detail tied to "${eventDescription}" in that city — used only to flavor how the Knorr soup itself is described (e.g. "with a mustard-oil tempering", "curry-leaf aroma"), never to swap in a different food as the thing being sold. Give each asset a genuinely different creative angle and sentence structure — do not reuse the same template (e.g. do not write every headline as "<City>'s winter + Knorr's <soup>, ready in X minutes"); vary whether it leads with weather, a local occasion, a price hook, or a taste callout — all while still being unmistakably an ad for hot Knorr soup. Write natural, benefit-led vernacular ad headlines the way a real LOCAL regional copywriter for that specific city would — evoke warmth, comfort, nutrition, or energy where locally resonant. Do not self-censor or sanitize claims; a separate compliance system reviews this content afterward.`;
+
+  const outputSpec =
+    numVariants > 1
+      ? `3. variants: Array of exactly ${numVariants} DISTINCT creative directions for the brand manager to choose between — each a genuinely different overall angle/tone (e.g. one leading with weather & comfort, one with a local festive/occasion hook, one with a value/price/speed hook), NOT just reworded copies of each other. Each variant object: { angle: string (a short 2-4 word label naming this variant's creative angle, e.g. "Weather & Comfort"), assets: Array of exactly ${chosenClusters.length} Knorr soup creative objects (per the product rule above — every one advertises Knorr soup), one per required cluster above (use its exact code for "c" and its exact language for "lang"), each with: ${assetShape} }`
+      : `3. assets: Array of exactly ${chosenClusters.length} Knorr soup creative objects (per the product rule above — every one advertises Knorr soup), one per required cluster above (use its exact code for "c" and its exact language for "lang"), each with: ${assetShape}`;
+
   const prompt = `You are ECHO (consumer sentiment), MAKER (regional creative), BHASHA (language localization) and COMMERCE (channel reach) agents for RASOI (HUL Knorr Kitchen Demand Engine).
 Market trigger event: "${eventDescription}"
 Region/Context: "${region || "India"}"
@@ -904,10 +929,9 @@ ${clusterBrief}
 Generate a structured JSON object with:
 1. verdict: A 1-sentence predicted category offtake summary, prefixed with "✓".
 2. kpis: Array of exactly 6 tuples [valueStr, labelStr, unitStr] covering launch speed, regional versions, store reach, governance touches, compute cost, and predicted sales lift.
-3. assets: Array of exactly ${chosenClusters.length} Knorr soup creative objects (per the product rule above — every one advertises Knorr soup), one per required cluster above (use its exact code for "c" and its exact language for "lang"), each with:
-   { c: string (the exact cluster code given above), city: string (a real specific city within that cluster), lang: string (the exact language given above, e.g. "Hindi (hi-IN)"), fmt: string (ad format e.g. "1:1 Quick Feed", "9:16 Reel"), head: string (headline written IN the local language/script), sub: string (subheading in local language), badge: string (short status badge text), q: string (price like "₹ 55"), englishMeaning: string (REQUIRED plain-English gloss of head+sub), tasteNote: string (1 short sentence on the regional taste adaptation, using the local taste cue given above) }
+${outputSpec}
 
-Ground each asset in something SPECIFIC to that exact place and to this exact trigger event — a real local landmark, a region-specific SPICE or FLAVOR habit, or a concrete detail tied to "${eventDescription}" in that city — used only to flavor how the Knorr soup itself is described (e.g. "with a mustard-oil tempering", "curry-leaf aroma"), never to swap in a different food as the thing being sold. Give each asset a genuinely different creative angle and sentence structure — do not reuse the same template (e.g. do not write every headline as "<City>'s winter + Knorr's <soup>, ready in X minutes"); vary whether it leads with weather, a local occasion, a price hook, or a taste callout — all while still being unmistakably an ad for hot Knorr soup. Write natural, benefit-led vernacular ad headlines the way a real LOCAL regional copywriter for that specific city would — evoke warmth, comfort, nutrition, or energy where locally resonant. Do not self-censor or sanitize claims; a separate compliance system reviews this content afterward.`;
+${groundingParagraph}`;
 
   try {
     const { text, provider } = await generateAI(
@@ -915,7 +939,12 @@ Ground each asset in something SPECIFIC to that exact place and to this exact tr
       prompt
     );
     const data = JSON.parse(text);
-    if (Array.isArray(data.assets) && Array.isArray(data.kpis) && data.kpis[1]) {
+    if (numVariants > 1 && Array.isArray(data.variants)) {
+      const firstAssets = data.variants[0]?.assets;
+      if (Array.isArray(firstAssets) && Array.isArray(data.kpis) && data.kpis[1]) {
+        data.kpis[1] = [String(firstAssets.length), "Regional Versions", "Tailored"];
+      }
+    } else if (Array.isArray(data.assets) && Array.isArray(data.kpis) && data.kpis[1]) {
       data.kpis[1] = [String(data.assets.length), "Regional Versions", "Tailored"];
     }
     res.json({ success: true, data, provider });

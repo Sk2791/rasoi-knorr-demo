@@ -1,5 +1,5 @@
 import React from "react";
-import { CheckCircle2, TrendingUp, MapPin, ShoppingCart, Clock, ArrowLeft } from "lucide-react";
+import { CheckCircle2, ShieldCheck, TrendingUp, MapPin, ShoppingCart, Clock, ArrowLeft } from "lucide-react";
 import { TriggerRecord } from "../types";
 
 interface RunSummaryScreenProps {
@@ -9,19 +9,30 @@ interface RunSummaryScreenProps {
 
 export const RunSummaryScreen: React.FC<RunSummaryScreenProps> = ({ trigger, onBackToHome }) => {
   const benefit = trigger.expectedBenefit;
+  // A run finishing means the Brand Manager cleared it — but it isn't fully
+  // live until a Regional Marketing Lead signs off, so say so honestly here.
+  const awaitingSignOff = trigger.status === "pending_regional_approval";
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-4 sm:p-6 lg:p-8 flex items-center justify-center">
       <div className="max-w-2xl w-full">
         <div className="text-center mb-6">
-          <div className="w-14 h-14 rounded-full bg-green-500/15 border border-green-500/40 text-green-400 flex items-center justify-center mx-auto mb-4">
-            <CheckCircle2 className="w-7 h-7" />
+          <div
+            className={`w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4 ${
+              awaitingSignOff
+                ? "bg-amber-500/15 border border-amber-500/40 text-amber-400"
+                : "bg-green-500/15 border border-green-500/40 text-green-400"
+            }`}
+          >
+            {awaitingSignOff ? <ShieldCheck className="w-7 h-7" /> : <CheckCircle2 className="w-7 h-7" />}
           </div>
           <h1 className="text-xl md:text-2xl font-extrabold text-white tracking-tight">
-            {trigger.name} is live
+            {awaitingSignOff ? `${trigger.name} awaiting regional sign-off` : `${trigger.name} is live`}
           </h1>
           <p className="text-sm text-slate-400 mt-1.5">
-            Here's the expected benefit from this campaign launch.
+            {awaitingSignOff
+              ? "A Regional Marketing Lead needs to sign this off from the Home dashboard before it goes fully live."
+              : "Here's the expected benefit from this campaign launch."}
           </p>
         </div>
 

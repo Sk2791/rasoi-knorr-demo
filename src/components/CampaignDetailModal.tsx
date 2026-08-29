@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { X, CheckCircle2, XCircle, TrendingUp } from "lucide-react";
+import { X, CheckCircle2, XCircle, TrendingUp, ShieldCheck } from "lucide-react";
 import { Asset, TriggerRecord } from "../types";
 import { deriveEventTheme } from "../lib/theme";
 import { AssetGrid } from "./AssetGrid";
@@ -16,7 +16,8 @@ export const CampaignDetailModal: React.FC<CampaignDetailModalProps> = ({ trigge
   if (!trigger) return null;
 
   const eventTheme = deriveEventTheme(`${trigger.name} ${trigger.blurb}`);
-  const canEdit = trigger.status === "approved" && !!trigger.runResult;
+  const canEdit =
+    (trigger.status === "approved" || trigger.status === "pending_regional_approval") && !!trigger.runResult;
 
   const handleAssetsChange = async (updated: Asset[]) => {
     setAssets(updated);
@@ -46,6 +47,8 @@ export const CampaignDetailModal: React.FC<CampaignDetailModalProps> = ({ trigge
           <div className="flex items-center gap-2.5">
             {trigger.status === "approved" ? (
               <CheckCircle2 className="w-4.5 h-4.5 text-emerald-400 shrink-0" />
+            ) : trigger.status === "pending_regional_approval" ? (
+              <ShieldCheck className="w-4.5 h-4.5 text-amber-400 shrink-0" />
             ) : (
               <XCircle className="w-4.5 h-4.5 text-red-400 shrink-0" />
             )}
@@ -62,18 +65,25 @@ export const CampaignDetailModal: React.FC<CampaignDetailModalProps> = ({ trigge
           </button>
         </div>
 
-        {trigger.status === "approved" && trigger.expectedBenefit && (
-          <div className="flex flex-wrap items-center gap-2.5 mt-3">
-            <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-full">
-              <TrendingUp className="w-3.5 h-3.5" />
-              {trigger.expectedBenefit.salesLift} sales lift
-            </span>
-            <span className="text-xs font-semibold text-slate-300 bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700">
-              {trigger.expectedBenefit.turnaround} turnaround
-            </span>
-            <span className="text-xs font-semibold text-slate-300 bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700">
-              {trigger.expectedBenefit.regionsLaunched} regions launched
-            </span>
+        {(trigger.status === "approved" || trigger.status === "pending_regional_approval") &&
+          trigger.expectedBenefit && (
+            <div className="flex flex-wrap items-center gap-2.5 mt-3">
+              <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-full">
+                <TrendingUp className="w-3.5 h-3.5" />
+                {trigger.expectedBenefit.salesLift} sales lift
+              </span>
+              <span className="text-xs font-semibold text-slate-300 bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700">
+                {trigger.expectedBenefit.turnaround} turnaround
+              </span>
+              <span className="text-xs font-semibold text-slate-300 bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700">
+                {trigger.expectedBenefit.regionsLaunched} regions launched
+              </span>
+            </div>
+          )}
+
+        {trigger.status === "pending_regional_approval" && (
+          <div className="mt-3 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3">
+            Awaiting Regional Marketing Lead sign-off before this campaign goes fully live.
           </div>
         )}
 

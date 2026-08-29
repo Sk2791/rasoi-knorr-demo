@@ -134,7 +134,7 @@ export const BigTriggerCard: React.FC<BigTriggerCardProps> = ({
               <CheckCircle2 className="w-5 h-5 text-green-400 shrink-0" />
               <div>
                 <div className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                  All Regional Campaigns Live & Approved!
+                  Regional Campaigns Generated — Sent for Regional Sign-Off
                   {liveModeStatus === "live" && (
                     <span className="flex items-center gap-1 text-[9px] font-bold text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 px-1.5 py-0.5 rounded-full normal-case">
                       <Radio className="w-2.5 h-2.5" /> Live · {providerLabel || "Gemini"}

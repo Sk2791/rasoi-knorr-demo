@@ -10,6 +10,8 @@ import {
   RefreshCw,
   Loader2,
   Wand2,
+  ThumbsUp,
+  ThumbsDown,
 } from "lucide-react";
 
 interface AssetGridProps {
@@ -671,6 +673,16 @@ export const AssetGrid: React.FC<AssetGridProps> = ({
     }
   };
 
+  // Cheap track record of "is the AI's output actually good" — persisted the
+  // same way a regenerated card is, ahead of ever wiring up real
+  // campaign-performance feedback.
+  const handleFeedback = (asset: Asset, value: "up" | "down") => {
+    const updated = assets.map((a) =>
+      a.c === asset.c ? { ...a, feedback: a.feedback === value ? undefined : value } : a
+    );
+    onAssetsChange?.(updated);
+  };
+
   const regionMap: Record<string, string[]> = {
     all: [],
     north: ["DL", "PB", "UP", "RJ"],
@@ -812,6 +824,36 @@ export const AssetGrid: React.FC<AssetGridProps> = ({
                     <p className="text-slate-300 text-[11px] mt-0.5 leading-snug">
                       {a.tasteNote}
                     </p>
+                  </div>
+                )}
+
+                {onAssetsChange && (
+                  <div className="flex items-center gap-2.5 pt-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Rate this creative
+                    </span>
+                    <button
+                      onClick={() => handleFeedback(a, "up")}
+                      title="Good creative"
+                      className={`p-1 rounded-lg cursor-pointer transition-colors ${
+                        a.feedback === "up"
+                          ? "text-emerald-400 bg-emerald-500/10"
+                          : "text-slate-500 hover:text-emerald-400"
+                      }`}
+                    >
+                      <ThumbsUp className="w-3.5 h-3.5" fill={a.feedback === "up" ? "currentColor" : "none"} />
+                    </button>
+                    <button
+                      onClick={() => handleFeedback(a, "down")}
+                      title="Needs work"
+                      className={`p-1 rounded-lg cursor-pointer transition-colors ${
+                        a.feedback === "down"
+                          ? "text-red-400 bg-red-500/10"
+                          : "text-slate-500 hover:text-red-400"
+                      }`}
+                    >
+                      <ThumbsDown className="w-3.5 h-3.5" fill={a.feedback === "down" ? "currentColor" : "none"} />
+                    </button>
                   </div>
                 )}
 

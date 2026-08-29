@@ -22,6 +22,18 @@ export interface Asset {
   suggestedEdit?: string;
   suggestedEnglish?: string;
   status?: "live" | "held" | "approved" | "rejected";
+  // Lightweight brand-manager rating on the generated creative — a cheap
+  // track record of "is the AI's output actually good" ahead of ever wiring
+  // up real campaign-performance feedback.
+  feedback?: "up" | "down";
+}
+
+// One of several distinct creative directions MAKER proposes for the same
+// trigger — the brand manager picks one instead of the pipeline committing
+// to a single AI guess.
+export interface CreativeVariant {
+  angle: string;
+  assets: Asset[];
 }
 
 export interface Trigger {
@@ -96,7 +108,12 @@ export interface FlaggedClaim {
 
 export type EventTheme = "cold" | "rain" | "festival" | "sport" | "default";
 
-export type TriggerStatus = "pending" | "saved" | "approved" | "cancelled";
+// "pending_regional_approval" sits between a brand manager's run completing
+// and the campaign actually going live — it needs a second sign-off from a
+// Regional Marketing Lead first, mirroring a real two-step approval chain.
+export type TriggerStatus = "pending" | "saved" | "pending_regional_approval" | "approved" | "cancelled";
+
+export type UserRole = "Brand Manager" | "Regional Marketing Lead";
 
 export type Screen = "login" | "home" | "review" | "run" | "summary";
 
@@ -112,6 +129,9 @@ export interface RunResult {
   kpis: Array<[string, string, string]>;
   assets: Asset[];
   provider?: string | null;
+  // The full set of creative directions MAKER generated, kept for audit —
+  // assets above is just whichever one the brand manager picked.
+  variants?: CreativeVariant[];
 }
 
 export interface TriggerRecord extends Trigger {

@@ -18,13 +18,17 @@ import {
   Bell,
   ListChecks,
   RotateCcw,
+  UserCog,
+  ShieldCheck,
+  FileBarChart2,
 } from "lucide-react";
-import { TriggerRecord, BannerRecord, Asset, Cluster, AppNotification } from "../types";
+import { TriggerRecord, BannerRecord, Asset, Cluster, AppNotification, UserRole } from "../types";
 import { CLUSTERS, TRIGGERS as PRESET_TRIGGERS } from "../data/mockData";
 import { TickingStat } from "./TickingStat";
 import { TasteRadarChart } from "./TasteRadarChart";
 import { CampaignDetailModal } from "./CampaignDetailModal";
 import { AssetGrid } from "./AssetGrid";
+import { RoiReportModal } from "./RoiReportModal";
 import { deriveEventTheme } from "../lib/theme";
 
 interface HomeDashboardProps {
@@ -38,6 +42,10 @@ interface HomeDashboardProps {
   onTriggersRefresh: () => Promise<void> | void;
   notifications: AppNotification[];
   onNotify: (message: string) => void;
+  activeRole: UserRole;
+  onSwitchRole: (role: UserRole) => void;
+  onFinalApprove: (id: string) => void;
+  onSendBack: (id: string) => void;
 }
 
 // The 6 seeded scenario topics vs. anything the AI originated on its own
@@ -102,6 +110,10 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
   onTriggersRefresh,
   notifications,
   onNotify,
+  activeRole,
+  onSwitchRole,
+  onFinalApprove,
+  onSendBack,
 }) => {
   const [isScanning, setIsScanning] = useState(false);
   const [scanError, setScanError] = useState("");
@@ -110,11 +122,17 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
   const [showAllRegions, setShowAllRegions] = useState(false);
   const [showAllHistory, setShowAllHistory] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showRoleMenu, setShowRoleMenu] = useState(false);
+  const [showRoiReport, setShowRoiReport] = useState(false);
+  const [signingOffId, setSigningOffId] = useState<string | null>(null);
 
   const pending = triggers.filter((t) => t.status === "pending");
   const presetPending = pending.filter((t) => isPresetId(t.id));
   const aiPending = pending.filter((t) => !isPresetId(t.id));
   const saved = triggers.filter((t) => t.status === "saved");
+  const awaitingRegionalApproval = triggers
+    .filter((t) => t.status === "pending_regional_approval")
+    .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
   const history = triggers
     .filter((t) => t.status === "approved" || t.status === "cancelled")
     .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
@@ -195,6 +213,27 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
     }
   };
 
+  const handleFinalApproveClick = async (id: string) => {
+    setSigningOffId(id);
+    try {
+      await onFinalApprove(id);
+    } finally {
+      setSigningOffId(null);
+    }
+  };
+
+  const handleSendBackClick = async (id: string) => {
+    if (!window.confirm("Send this campaign back? It'll be marked cancelled and the brand manager will need to re-run it.")) {
+      return;
+    }
+    setSigningOffId(id);
+    try {
+      await onSendBack(id);
+    } finally {
+      setSigningOffId(null);
+    }
+  };
+
   const visibleClusters: Cluster[] = showAllRegions
     ? CLUSTERS
     : CLUSTERS.filter((c) => METRO_CLUSTER_CODES.includes(c.c));
@@ -253,6 +292,49 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
                         ))}
                       </div>
                     )}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <button
+              onClick={() => setShowRoiReport(true)}
+              title="CFO-facing report of agency cost avoided across every approved campaign"
+              className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-white px-3 py-2 rounded-xl border border-slate-800 hover:border-slate-700 transition-colors cursor-pointer"
+            >
+              <FileBarChart2 className="w-3.5 h-3.5" />
+              ROI Report
+            </button>
+
+            <div className="relative">
+              <button
+                onClick={() => setShowRoleMenu((v) => !v)}
+                title="Switch persona to simulate the two-step approval chain"
+                className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-white px-3 py-2 rounded-xl border border-slate-800 hover:border-slate-700 transition-colors cursor-pointer"
+              >
+                <UserCog className="w-3.5 h-3.5" />
+                Acting as: <span className="text-slate-200">{activeRole}</span>
+              </button>
+              {showRoleMenu && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowRoleMenu(false)} />
+                  <div className="absolute right-0 top-11 w-56 border border-slate-800 rounded-2xl bg-slate-900 shadow-2xl z-50 p-1.5">
+                    {(["Brand Manager", "Regional Marketing Lead"] as UserRole[]).map((role) => (
+                      <button
+                        key={role}
+                        onClick={() => {
+                          onSwitchRole(role);
+                          setShowRoleMenu(false);
+                        }}
+                        className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer transition-colors ${
+                          role === activeRole
+                            ? "bg-orange-500/15 text-orange-300"
+                            : "text-slate-300 hover:bg-slate-800/60"
+                        }`}
+                      >
+                        {role}
+                      </button>
+                    ))}
                   </div>
                 </>
               )}
@@ -340,6 +422,32 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-7 items-start">
           {/* Left column */}
           <div className="lg:col-span-2 flex flex-col gap-6">
+            {/* Awaiting Regional Sign-Off — second step of the approval chain.
+                A Brand Manager's completed run lands here; it isn't fully
+                live (or counted in KPIs/History) until a Regional Marketing
+                Lead signs off. */}
+            {awaitingRegionalApproval.length > 0 && (
+              <section>
+                <h2 className="text-sm font-extrabold text-white uppercase tracking-wide flex items-center gap-2 mb-3">
+                  <ShieldCheck className="w-4 h-4 text-amber-400" />
+                  Awaiting Regional Sign-Off ({awaitingRegionalApproval.length})
+                </h2>
+                <div className="grid grid-cols-1 gap-3">
+                  {awaitingRegionalApproval.map((t) => (
+                    <RegionalApprovalRow
+                      key={t.id}
+                      trigger={t}
+                      canAct={activeRole === "Regional Marketing Lead"}
+                      isBusy={signingOffId === t.id}
+                      onView={() => setDetailTrigger(t)}
+                      onApprove={() => handleFinalApproveClick(t.id)}
+                      onSendBack={() => handleSendBackClick(t.id)}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+
             {/* Predefined Events — the 6 seeded scenario topics */}
             <section>
               <h2 className="text-sm font-extrabold text-white uppercase tracking-wide flex items-center gap-2 mb-3">
@@ -546,9 +654,60 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
         onClose={() => setDetailTrigger(null)}
         onTriggerUpdated={onTriggersRefresh}
       />
+
+      {showRoiReport && <RoiReportModal triggers={triggers} onClose={() => setShowRoiReport(false)} />}
     </div>
   );
 };
+
+const RegionalApprovalRow: React.FC<{
+  trigger: TriggerRecord;
+  canAct: boolean;
+  isBusy: boolean;
+  onView: () => void;
+  onApprove: () => void;
+  onSendBack: () => void;
+}> = ({ trigger, canAct, isBusy, onView, onApprove, onSendBack }) => (
+  <div className="border border-amber-500/30 rounded-2xl bg-slate-900/60 p-4 flex items-center justify-between gap-3 flex-wrap">
+    <button onClick={onView} className="min-w-0 text-left cursor-pointer">
+      <div className="text-sm font-bold text-white truncate hover:text-orange-400 transition-colors">
+        {trigger.name}
+      </div>
+      <div className="text-[11px] text-slate-400 mt-0.5 truncate flex items-center gap-2">
+        <span>Approved by {trigger.approvedBy || "Brand Manager"}</span>
+        {trigger.expectedBenefit && (
+          <span className="text-emerald-400 font-semibold flex items-center gap-1">
+            <TrendingUp className="w-3 h-3" />
+            {trigger.expectedBenefit.salesLift}
+          </span>
+        )}
+      </div>
+    </button>
+    {canAct ? (
+      <div className="flex items-center gap-2 shrink-0">
+        <button
+          onClick={onSendBack}
+          disabled={isBusy}
+          className="text-xs font-bold text-slate-400 hover:text-red-400 px-3 py-2 rounded-xl border border-slate-800 hover:border-red-500/40 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Send Back
+        </button>
+        <button
+          onClick={onApprove}
+          disabled={isBusy}
+          className="flex items-center gap-1.5 text-xs font-bold text-slate-950 bg-gradient-to-r from-emerald-500 to-emerald-400 px-3.5 py-2 rounded-xl hover:shadow-lg transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
+          Final Approve
+        </button>
+      </div>
+    ) : (
+      <span className="text-[11px] font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-3 py-1.5 rounded-full shrink-0">
+        Waiting on Regional Marketing Lead
+      </span>
+    )}
+  </div>
+);
 
 const TriggerRow: React.FC<{ trigger: TriggerRecord; onReview: () => void }> = ({ trigger, onReview }) => (
   <div className="border border-slate-800/90 rounded-2xl bg-slate-900/60 p-4 flex items-center justify-between gap-3 hover:border-orange-500/40 transition-colors">
