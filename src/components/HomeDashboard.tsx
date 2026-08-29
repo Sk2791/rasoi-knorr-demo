@@ -9,7 +9,6 @@ import {
   XCircle,
   TrendingUp,
   Store,
-  ShoppingCart,
   LogOut,
   Radar,
   Loader2,
@@ -138,8 +137,6 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
   const history = triggers
     .filter((t) => t.status === "approved" || t.status === "cancelled")
     .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
-
-  const totalOrders = banners.reduce((sum, b) => sum + (b.orderCount || 0), 0);
 
   const { totalCostSavings, avgSalesLift } = useMemo(() => {
     const approved = triggers.filter((t) => t.status === "approved");
@@ -367,7 +364,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
         </div>
 
         {/* Summary Strip */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5 mb-7">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 mb-7">
           <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4">
             <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1.5">
               <Flame className="w-3.5 h-3.5 text-orange-400" />
@@ -390,15 +387,6 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
               Banners Across Regions
             </div>
             <b className="text-2xl font-extrabold text-sky-400">{banners.length}</b>
-          </div>
-          <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1.5">
-              <ShoppingCart className="w-3.5 h-3.5 text-amber-400" />
-              Simulated Orders
-            </div>
-            <b className="text-2xl font-extrabold text-amber-400">
-              <TickingStat value={totalOrders} />
-            </b>
           </div>
           <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4">
             <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1.5">
