@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Stop-Process -Id 33976 -Force -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-Process -Id 33976 -ErrorAction SilentlyContinue)",
+      "Bash(powershell -NoProfile -Command \"Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue\")"
+    ]
+  }
+}

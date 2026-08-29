@@ -1,0 +1,8 @@
+{
+  "name": "Knorr Project NEXT Demand Engine",
+  "description": "Executive dashboard for Knorr brand managers to detect real-time market triggers, launch 14 regional campaign versions, and manage FSSAI compliance guardrails.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
