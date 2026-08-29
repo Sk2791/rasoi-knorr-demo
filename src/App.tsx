@@ -613,7 +613,11 @@ export default function App() {
       opp: liveOpp,
       scores: liveScores,
       affectedClusters,
-      variantCount: 3,
+      // 2 rather than 3 — still satisfies "2-3 options," but keeps the JSON
+      // response small enough that Groq's fallback reliably produces valid
+      // JSON for it (a 3-variant response was measurably more likely to
+      // come back malformed under load).
+      variantCount: 2,
     });
     if (isKilledRef.current) return;
 
