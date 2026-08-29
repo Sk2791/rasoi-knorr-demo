@@ -358,6 +358,13 @@ export default function App() {
 
   // Abandon the current run and return to the dashboard
   const handleAbortToHome = () => {
+    // A run in progress means an AI call is actually in flight — confirm
+    // before throwing that away, since there's otherwise no way back once
+    // it's gone. Once the run has finished (or hasn't started), leaving is
+    // free.
+    if (isRunning && !window.confirm("Leave this campaign? The current run will be cancelled and its progress lost.")) {
+      return;
+    }
     handleReset();
     setCurrentTriggerId(null);
     setScreen("home");
@@ -879,7 +886,6 @@ export default function App() {
       <div id="knorr-app-shell" className="max-w-7xl mx-auto flex flex-col min-h-screen">
         <Header
           elapsedTime={elapsedTime}
-          isRunning={isRunning}
           isTechnicalView={isTechnicalView}
           onToggleTechnicalView={() => setIsTechnicalView(!isTechnicalView)}
           onReset={handleAbortToHome}

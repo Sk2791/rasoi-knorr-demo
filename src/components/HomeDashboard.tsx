@@ -426,137 +426,153 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
                 A Brand Manager's completed run lands here; it isn't fully
                 live (or counted in KPIs/History) until a Regional Marketing
                 Lead signs off. */}
-            {awaitingRegionalApproval.length > 0 && (
+            {/* Awaiting Regional Sign-Off is the Lead's primary section, so it
+                always renders (with an empty state) for that role; the Brand
+                Manager only sees it when there's actually something pending. */}
+            {(activeRole === "Regional Marketing Lead" || awaitingRegionalApproval.length > 0) && (
               <section>
                 <h2 className="text-sm font-extrabold text-white uppercase tracking-wide flex items-center gap-2 mb-3">
                   <ShieldCheck className="w-4 h-4 text-amber-400" />
                   Awaiting Regional Sign-Off ({awaitingRegionalApproval.length})
                 </h2>
-                <div className="grid grid-cols-1 gap-3">
-                  {awaitingRegionalApproval.map((t) => (
-                    <RegionalApprovalRow
-                      key={t.id}
-                      trigger={t}
-                      canAct={activeRole === "Regional Marketing Lead"}
-                      isBusy={signingOffId === t.id}
-                      onView={() => setDetailTrigger(t)}
-                      onApprove={() => handleFinalApproveClick(t.id)}
-                      onSendBack={() => handleSendBackClick(t.id)}
-                    />
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {/* Predefined Events — the 6 seeded scenario topics */}
-            <section>
-              <h2 className="text-sm font-extrabold text-white uppercase tracking-wide flex items-center gap-2 mb-3">
-                <ListChecks className="w-4 h-4 text-slate-400" />
-                Predefined Events
-              </h2>
-
-              {presetPending.length === 0 ? (
-                <div className="border border-dashed border-slate-800 rounded-2xl p-6 text-center text-sm text-slate-500">
-                  All predefined events have been reviewed — see History below.
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {presetPending.map((t) => (
-                    <TriggerRow key={t.id} trigger={t} onReview={() => onReviewTrigger(t.id)} />
-                  ))}
-                </div>
-              )}
-            </section>
-
-            {/* New AI Event Triggers — anything the AI originated itself, via Scan or a custom proposal */}
-            <section>
-              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-                <h2 className="text-sm font-extrabold text-white uppercase tracking-wide flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
-                  New AI Event Triggers
-                </h2>
-                <div className="flex items-center gap-4">
-                  <button
-                    onClick={handleScan}
-                    disabled={isScanning}
-                    className="text-xs font-semibold text-sky-400 hover:text-sky-300 flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isScanning ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <Radar className="w-3.5 h-3.5" />
-                    )}
-                    Scan
-                  </button>
-                  <button
-                    onClick={onOpenCustomModal}
-                    className="text-xs font-semibold text-orange-400 hover:text-orange-300 flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    Propose Custom Event
-                  </button>
-                </div>
-              </div>
-
-              {scanError && (
-                <div className="text-[11px] text-red-400 bg-red-500/10 border border-red-500/20 p-2.5 rounded-xl mb-3">
-                  {scanError}
-                </div>
-              )}
-
-              {aiPending.length === 0 ? (
-                <div className="border border-dashed border-slate-800 rounded-2xl p-6 text-center text-sm text-slate-500">
-                  No AI-originated opportunities right now — scan for one or propose a custom event.
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {aiPending.map((t) => (
-                    <TriggerRow key={t.id} trigger={t} onReview={() => onReviewTrigger(t.id)} />
-                  ))}
-                </div>
-              )}
-            </section>
-
-            {/* Saved for Later */}
-            {saved.length > 0 && (
-              <section>
-                <h2 className="text-sm font-extrabold text-white uppercase tracking-wide flex items-center gap-2 mb-3">
-                  <Bookmark className="w-4 h-4 text-slate-400" />
-                  Saved for Later
-                </h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {saved.map((t) => (
-                    <TriggerRow key={t.id} trigger={t} onReview={() => onReviewTrigger(t.id)} />
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {/* Taste Profile Explorer */}
-            <section>
-              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-                <h2 className="text-sm font-extrabold text-white uppercase tracking-wide">
-                  Taste Profile Explorer · SWAAD
-                </h2>
-                <button
-                  onClick={() => setShowAllRegions((v) => !v)}
-                  className="text-xs font-semibold text-orange-400 hover:text-orange-300 cursor-pointer"
-                >
-                  {showAllRegions ? "Show metro cities only" : `Show all ${CLUSTERS.length} regions →`}
-                </button>
-              </div>
-              <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2">
-                {visibleClusters.map((c) => (
-                  <div
-                    key={c.c}
-                    className="border border-slate-800/90 rounded-xl bg-slate-900/60 p-1.5 flex flex-col items-center text-center"
-                  >
-                    <TasteRadarChart cluster={c} className="w-[76px] h-[70px]" />
-                    <div className="text-[10px] font-bold text-white mt-0.5 leading-tight">{c.n}</div>
+                {awaitingRegionalApproval.length === 0 ? (
+                  <div className="border border-dashed border-slate-800 rounded-2xl p-6 text-center text-sm text-slate-500">
+                    No campaigns awaiting your sign-off right now.
                   </div>
-                ))}
-              </div>
-            </section>
+                ) : (
+                  <div className="grid grid-cols-1 gap-3">
+                    {awaitingRegionalApproval.map((t) => (
+                      <RegionalApprovalRow
+                        key={t.id}
+                        trigger={t}
+                        canAct={activeRole === "Regional Marketing Lead"}
+                        isBusy={signingOffId === t.id}
+                        onView={() => setDetailTrigger(t)}
+                        onApprove={() => handleFinalApproveClick(t.id)}
+                        onSendBack={() => handleSendBackClick(t.id)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* Everything below initiates or reviews NEW triggers — a Regional
+                Marketing Lead's job here is only to sign off on campaigns
+                already generated, not to originate them. */}
+            {activeRole === "Brand Manager" && (
+              <>
+                {/* Predefined Events — the 6 seeded scenario topics */}
+                <section>
+                  <h2 className="text-sm font-extrabold text-white uppercase tracking-wide flex items-center gap-2 mb-3">
+                    <ListChecks className="w-4 h-4 text-slate-400" />
+                    Predefined Events
+                  </h2>
+
+                  {presetPending.length === 0 ? (
+                    <div className="border border-dashed border-slate-800 rounded-2xl p-6 text-center text-sm text-slate-500">
+                      All predefined events have been reviewed — see History below.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {presetPending.map((t) => (
+                        <TriggerRow key={t.id} trigger={t} onReview={() => onReviewTrigger(t.id)} />
+                      ))}
+                    </div>
+                  )}
+                </section>
+
+                {/* New AI Event Triggers — anything the AI originated itself, via Scan or a custom proposal */}
+                <section>
+                  <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                    <h2 className="text-sm font-extrabold text-white uppercase tracking-wide flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+                      New AI Event Triggers
+                    </h2>
+                    <div className="flex items-center gap-4">
+                      <button
+                        onClick={handleScan}
+                        disabled={isScanning}
+                        className="text-xs font-semibold text-sky-400 hover:text-sky-300 flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isScanning ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Radar className="w-3.5 h-3.5" />
+                        )}
+                        Scan
+                      </button>
+                      <button
+                        onClick={onOpenCustomModal}
+                        className="text-xs font-semibold text-orange-400 hover:text-orange-300 flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        Propose Custom Event
+                      </button>
+                    </div>
+                  </div>
+
+                  {scanError && (
+                    <div className="text-[11px] text-red-400 bg-red-500/10 border border-red-500/20 p-2.5 rounded-xl mb-3">
+                      {scanError}
+                    </div>
+                  )}
+
+                  {aiPending.length === 0 ? (
+                    <div className="border border-dashed border-slate-800 rounded-2xl p-6 text-center text-sm text-slate-500">
+                      No AI-originated opportunities right now — scan for one or propose a custom event.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {aiPending.map((t) => (
+                        <TriggerRow key={t.id} trigger={t} onReview={() => onReviewTrigger(t.id)} />
+                      ))}
+                    </div>
+                  )}
+                </section>
+
+                {/* Saved for Later */}
+                {saved.length > 0 && (
+                  <section>
+                    <h2 className="text-sm font-extrabold text-white uppercase tracking-wide flex items-center gap-2 mb-3">
+                      <Bookmark className="w-4 h-4 text-slate-400" />
+                      Saved for Later
+                    </h2>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {saved.map((t) => (
+                        <TriggerRow key={t.id} trigger={t} onReview={() => onReviewTrigger(t.id)} />
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {/* Taste Profile Explorer */}
+                <section>
+                  <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                    <h2 className="text-sm font-extrabold text-white uppercase tracking-wide">
+                      Taste Profile Explorer · SWAAD
+                    </h2>
+                    <button
+                      onClick={() => setShowAllRegions((v) => !v)}
+                      className="text-xs font-semibold text-orange-400 hover:text-orange-300 cursor-pointer"
+                    >
+                      {showAllRegions ? "Show metro cities only" : `Show all ${CLUSTERS.length} regions →`}
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2">
+                    {visibleClusters.map((c) => (
+                      <div
+                        key={c.c}
+                        className="border border-slate-800/90 rounded-xl bg-slate-900/60 p-1.5 flex flex-col items-center text-center"
+                      >
+                        <TasteRadarChart cluster={c} className="w-[76px] h-[70px]" />
+                        <div className="text-[10px] font-bold text-white mt-0.5 leading-tight">{c.n}</div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              </>
+            )}
           </div>
 
           {/* Right column: History, pinned so it stays visible while the left column scrolls */}

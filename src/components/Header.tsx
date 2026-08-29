@@ -1,9 +1,8 @@
 import React from "react";
-import { RotateCcw, Code2, LayoutDashboard, Sparkles } from "lucide-react";
+import { ArrowLeft, Code2, LayoutDashboard, Sparkles } from "lucide-react";
 
 interface HeaderProps {
   elapsedTime: string;
-  isRunning: boolean;
   isTechnicalView: boolean;
   onToggleTechnicalView: () => void;
   onReset: () => void;
@@ -11,7 +10,6 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({
   elapsedTime,
-  isRunning,
   isTechnicalView,
   onToggleTechnicalView,
   onReset,
@@ -80,13 +78,12 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
 
           <button
-            id="reset-simulation-btn"
+            id="back-to-home-btn"
             onClick={onReset}
-            disabled={isRunning}
-            className="font-semibold text-xs px-3.5 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700/80 text-slate-300 hover:bg-slate-700/70 hover:text-white transition-all cursor-pointer disabled:opacity-40 flex items-center gap-1.5"
+            className="font-semibold text-xs px-3.5 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700/80 text-slate-300 hover:bg-slate-700/70 hover:text-white transition-all cursor-pointer flex items-center gap-1.5"
           >
-            <RotateCcw className="w-3.5 h-3.5" />
-            Reset
+            <ArrowLeft className="w-3.5 h-3.5" />
+            Back to Dashboard
           </button>
         </div>
       </div>
