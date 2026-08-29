@@ -2,19 +2,18 @@
 <img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
 </div>
 
-# Run and deploy your AI Studio app
+# RASOI — Knorr Kitchen Demand Engine
 
-This contains everything you need to run your app locally.
+Source of truth: https://github.com/Sk2791/rasoi-knorr-demo
 
-View your app in AI Studio: https://ai.studio/apps/d3ac8e63-7570-4b2d-99b1-5fe25120014d
+This contains everything you need to run the app locally.
 
 ## Run Locally
 
-**Prerequisites:**  Node.js
-
+**Prerequisites:** Node.js v22+ (project run on Node v24 LTS)
 
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+2. Copy [.env.example](.env.example) to `.env` and set `GEMINI_API_KEY` (and optionally `GROQ_API_KEY` as a fallback)
 3. Run the app:
    `npm run dev`
