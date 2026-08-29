@@ -29,6 +29,7 @@ import { TasteRadarChart } from "./TasteRadarChart";
 import { CampaignDetailModal } from "./CampaignDetailModal";
 import { AssetGrid } from "./AssetGrid";
 import { RoiReportModal } from "./RoiReportModal";
+import { TasteProfileModal } from "./TasteProfileModal";
 import { deriveEventTheme } from "../lib/theme";
 
 interface HomeDashboardProps {
@@ -125,6 +126,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
   const [showRoleMenu, setShowRoleMenu] = useState(false);
   const [showRoiReport, setShowRoiReport] = useState(false);
   const [signingOffId, setSigningOffId] = useState<string | null>(null);
+  const [tasteModalCluster, setTasteModalCluster] = useState<Cluster | null>(null);
 
   const pending = triggers.filter((t) => t.status === "pending");
   const presetPending = pending.filter((t) => isPresetId(t.id));
@@ -343,15 +345,15 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
             <button
               onClick={handleResetDemo}
               disabled={isResettingDemo}
-              title="Restocks the 6 predefined events and trims History to the most recent 10 — leaves custom/scanned triggers untouched"
-              className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-white px-3 py-2 rounded-xl border border-slate-800 hover:border-slate-700 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Reset Demo Data — restocks the 6 predefined events and trims History to the most recent 10 — leaves custom/scanned triggers untouched"
+              aria-label="Reset Demo Data"
+              className="flex items-center justify-center w-9 h-9 rounded-xl border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isResettingDemo ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
-                <RotateCcw className="w-3.5 h-3.5" />
+                <RotateCcw className="w-4 h-4" />
               )}
-              Reset Demo Data
             </button>
 
             <button
@@ -561,13 +563,14 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
                   </div>
                   <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2">
                     {visibleClusters.map((c) => (
-                      <div
+                      <button
                         key={c.c}
-                        className="border border-slate-800/90 rounded-xl bg-slate-900/60 p-1.5 flex flex-col items-center text-center"
+                        onClick={() => setTasteModalCluster(c)}
+                        className="border border-slate-800/90 rounded-xl bg-slate-900/60 p-1.5 flex flex-col items-center text-center hover:border-orange-500/40 hover:bg-slate-900 transition-colors cursor-pointer"
                       >
                         <TasteRadarChart cluster={c} className="w-[76px] h-[70px]" />
                         <div className="text-[10px] font-bold text-white mt-0.5 leading-tight">{c.n}</div>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 </section>
@@ -672,6 +675,8 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
       />
 
       {showRoiReport && <RoiReportModal triggers={triggers} onClose={() => setShowRoiReport(false)} />}
+
+      <TasteProfileModal cluster={tasteModalCluster} onClose={() => setTasteModalCluster(null)} />
     </div>
   );
 };
