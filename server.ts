@@ -88,22 +88,23 @@ app.post("/api/demo/reset", (req, res) => {
   const insert = db.prepare(
     "INSERT INTO triggers (id, status, created_at, updated_at, data) VALUES (?, ?, ?, ?, ?)"
   );
+  // Checking only the ORIGINAL preset id's status is not enough — once a
+  // preset has ever been run, that original row stays approved/cancelled
+  // forever, so a naive check would restock it again on every single reset
+  // even while an unreviewed copy from a PREVIOUS reset is still sitting
+  // there untouched. Instead, look at every row belonging to this preset's
+  // "family" (the original id plus any `${key}_reset_*` copies) and only
+  // restock if none of them are currently available to review.
+  const allRows = db.prepare("SELECT id, status FROM triggers").all() as any[];
   let restocked = 0;
   Object.entries(SEED_TRIGGERS).forEach(([key, trigger], idx) => {
-    const existing = db.prepare("SELECT status FROM triggers WHERE id = ?").get(key) as any;
-    if (!existing) {
-      insert.run(key, "pending", now, now, JSON.stringify(trigger));
-      restocked++;
-    } else if (
-      existing.status === "approved" ||
-      existing.status === "cancelled" ||
-      existing.status === "pending_regional_approval"
-    ) {
-      const freshId = `${key}_reset_${Date.now()}_${idx}`;
-      insert.run(freshId, "pending", now, now, JSON.stringify(trigger));
-      restocked++;
-    }
-    // status 'pending' or 'saved' — already available, leave it exactly as is
+    const family = allRows.filter((r) => r.id === key || r.id.startsWith(`${key}_reset_`));
+    const alreadyAvailable = family.some((r) => r.status === "pending" || r.status === "saved");
+    if (alreadyAvailable) return;
+
+    const freshId = family.length === 0 ? key : `${key}_reset_${Date.now()}_${idx}`;
+    insert.run(freshId, "pending", now, now, JSON.stringify(trigger));
+    restocked++;
   });
 
   const historyRows = db
