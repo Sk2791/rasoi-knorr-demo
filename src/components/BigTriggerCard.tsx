@@ -10,7 +10,14 @@ interface BigTriggerCardProps {
   onApproveAndGenerate: () => void;
   onContinueToSummary: () => void;
   onOpenGateModal: () => void;
-  simProgressStep: number; // 0 = idle, 1 = signals, 2 = taste, 3 = bhasha, 4 = maker, 5 = sentinel gate
+  // 0 = idle, 1 = signals, 2 = taste, 3 = creative written (may be pending
+  // brand-manager approval — see awaitingApproval), 4 = compliance cleared.
+  simProgressStep: number;
+  // True while creative generation has finished but compliance hasn't run
+  // yet because the brand manager still needs to pick a direction — keeps
+  // the badge honestly at "3/4 pending" instead of jumping to "4/4 Complete"
+  // before compliance has actually happened.
+  awaitingApproval?: boolean;
   flaggedClaim?: FlaggedClaim | null;
   liveModeStatus?: "live" | "fallback" | null;
   providerLabel?: string | null;
@@ -25,6 +32,7 @@ export const BigTriggerCard: React.FC<BigTriggerCardProps> = ({
   onContinueToSummary,
   onOpenGateModal,
   simProgressStep,
+  awaitingApproval = false,
   flaggedClaim,
   liveModeStatus,
   providerLabel,
@@ -89,18 +97,19 @@ export const BigTriggerCard: React.FC<BigTriggerCardProps> = ({
               <RefreshCw className="w-5 h-5 text-orange-400 animate-spin flex-shrink-0" />
               <div>
                 <div className="text-xs font-bold text-white uppercase tracking-wider">
-                  Generating Regional Campaign Versions...
+                  {awaitingApproval ? "Awaiting Your Approval" : "Generating Regional Campaign Versions..."}
                 </div>
                 <div className="text-[11px] text-orange-300">
                   {simProgressStep === 1 && "Reading live weather, search & quick-commerce signals"}
                   {simProgressStep === 2 && "Adapting recipe taste profiles for the affected regions"}
-                  {simProgressStep === 3 && "Writing vernacular ad copy in local languages"}
-                  {simProgressStep === 4 && "Rendering campaign creative & checking FSSAI compliance"}
+                  {simProgressStep === 3 && !awaitingApproval && "Writing vernacular ad copy in local languages"}
+                  {simProgressStep === 3 && awaitingApproval && "Creative directions ready — pick one below to run compliance"}
+                  {simProgressStep === 4 && "Compliance cleared — campaign approved"}
                 </div>
               </div>
             </div>
             <div className="text-xs font-mono font-bold text-orange-400 bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-800">
-              {simProgressStep}/4 Complete
+              {simProgressStep}/4 {simProgressStep === 4 ? "Complete" : awaitingApproval ? "· Pending Approval" : ""}
             </div>
           </div>
         )}

@@ -172,8 +172,8 @@ Return a structured JSON object matching the RASOI trigger schema exactly:
 5. recommendation: 1-2 sentences on what action to approve.
 6. urgencyLevel: one of "Immediate (Next 3h)", "High (Next 12h)", "Moderate"
 7. affectedRegions: array of 3-6 real Indian region/city names actually affected (not all 14, only the plausibly affected ones)
-8. marketLift: string like "+18% Predicted Category Sales Lift"
-9. revenueHeadroom: string like "₹14.2 Crore Incremental Sales"
+8. marketLift: string like "+10-15% Predicted Category Sales Lift" — express as a RANGE, not a single point figure, and scale both ends of that range to this event's actual severity (urgencyLevel, number of affectedRegions, windowDuration): a localized, low-urgency, short-window event should land in a modest range (e.g. "+5-8%"), while a large-scale, multi-region, immediate/high-urgency event can justify a wider, higher range (up to roughly "+25-30%") — never a number disconnected from the event's real scale.
+9. revenueHeadroom: string like "₹8-12 Crore Incremental Sales" — also a range, scaled proportionally to affectedRegions.length and the marketLift range above, so the two figures stay internally consistent with each other and with the event's real scale.
 10. windowDuration: string like "72-Hour Demand Peak Window"
 11. targetMin: Estimated trigger-to-kitchen execution time in minutes (30-60).
 12. opp: Auto-generated occasion card text by ARBITER.
@@ -301,6 +301,8 @@ ${
     ? `The brand manager has given this specific direction for the new version — follow it closely, but it must still be consistent with the product rule above (the direction is about angle/tone/occasion, not a different product): "${guidance}"`
     : "Write a genuinely different creative angle and wording than a typical execution — vary whether it leads with weather, occasion, price, or a taste callout, and vary the sentence structure."
 }
+
+Give the native-language headline and subheading a fun, playful BOLLYWOOD-STYLE flair — punchy, rhythmic phrasing, a bit of filmy drama or wordplay — rather than a flat, literal, corporate-sounding translation.
 
 Generate a structured JSON object with:
 1. head: headline written IN the local language/script (${lang})
@@ -718,8 +720,8 @@ Generate a structured JSON response matching the RASOI trigger schema exactly. I
 5. recommendation: 1-2 sentences on what action to approve.
 6. urgencyLevel: one of "Immediate (Next 3h)", "High (Next 12h)", "Moderate"
 7. affectedRegions: array of 3-6 real Indian region/city names genuinely, geographically plausible for this specific event
-8. marketLift: string like "+18% Predicted Category Sales Lift"
-9. revenueHeadroom: string like "₹14.2 Crore Incremental Sales"
+8. marketLift: string like "+10-15% Predicted Category Sales Lift" — express as a RANGE, not a single point figure, and scale both ends of that range to this event's actual severity (urgencyLevel, number of affectedRegions, windowDuration): a localized, low-urgency, short-window event should land in a modest range (e.g. "+5-8%"), while a large-scale, multi-region, immediate/high-urgency event can justify a wider, higher range (up to roughly "+25-30%") — never a number disconnected from the event's real scale.
+9. revenueHeadroom: string like "₹8-12 Crore Incremental Sales" — also a range, scaled proportionally to affectedRegions.length and the marketLift range above, so the two figures stay internally consistent with each other and with the event's real scale.
 10. windowDuration: string like "72-Hour Demand Peak Window"
 11. targetMin: Estimated trigger-to-kitchen execution time in minutes (30-60).
 12. opp: Auto-generated occasion card text by ARBITER.
@@ -915,7 +917,7 @@ app.post("/api/pipeline/creative", async (req, res) => {
 
   const assetShape = `{ c: string (the exact cluster code given above), city: string (a real specific city within that cluster), lang: string (the exact language given above, e.g. "Hindi (hi-IN)"), fmt: string (ad format e.g. "1:1 Quick Feed", "9:16 Reel"), head: string (headline written IN the local language/script), sub: string (subheading in local language), badge: string (short status badge text), q: string (price like "₹ 55"), englishMeaning: string (REQUIRED plain-English gloss of head+sub), tasteNote: string (1 short sentence on the regional taste adaptation, using the local taste cue given above) }`;
 
-  const groundingParagraph = `Ground each asset in something SPECIFIC to that exact place and to this exact trigger event — a real local landmark, a region-specific SPICE or FLAVOR habit, or a concrete detail tied to "${eventDescription}" in that city — used only to flavor how the Knorr soup itself is described (e.g. "with a mustard-oil tempering", "curry-leaf aroma"), never to swap in a different food as the thing being sold. Give each asset a genuinely different creative angle and sentence structure — do not reuse the same template (e.g. do not write every headline as "<City>'s winter + Knorr's <soup>, ready in X minutes"); vary whether it leads with weather, a local occasion, a price hook, or a taste callout — all while still being unmistakably an ad for hot Knorr soup. Write natural, benefit-led vernacular ad headlines the way a real LOCAL regional copywriter for that specific city would — evoke warmth, comfort, nutrition, or energy where locally resonant. Do not self-censor or sanitize claims; a separate compliance system reviews this content afterward.`;
+  const groundingParagraph = `Ground each asset in something SPECIFIC to that exact place and to this exact trigger event — a real local landmark, a region-specific SPICE or FLAVOR habit, or a concrete detail tied to "${eventDescription}" in that city — used only to flavor how the Knorr soup itself is described (e.g. "with a mustard-oil tempering", "curry-leaf aroma"), never to swap in a different food as the thing being sold. Give each asset a genuinely different creative angle and sentence structure — do not reuse the same template (e.g. do not write every headline as "<City>'s winter + Knorr's <soup>, ready in X minutes"); vary whether it leads with weather, a local occasion, a price hook, or a taste callout — all while still being unmistakably an ad for hot Knorr soup. Write natural, benefit-led vernacular ad headlines the way a real LOCAL regional copywriter for that specific city would — evoke warmth, comfort, nutrition, or energy where locally resonant. Give the native-language headline and subheading a fun, playful BOLLYWOOD-STYLE flair — punchy, rhythmic phrasing, a bit of filmy drama or wordplay, the kind of line that could be a movie dialogue or a catchy song hook — rather than a flat, literal, corporate-sounding translation. Do not self-censor or sanitize claims; a separate compliance system reviews this content afterward.`;
 
   const outputSpec =
     numVariants > 1

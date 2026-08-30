@@ -501,6 +501,7 @@ export default function App() {
 
       setIsRunning(false);
       setIsCompleted(true);
+      setSimProgressStep(4);
       if (timerRef.current) clearInterval(timerRef.current);
 
       finalizeTrigger({
@@ -647,7 +648,8 @@ export default function App() {
       addLog("ECHO & BHASHA: Consumer reactions simulated & regional copy localized live.");
       addLog(`MAKER & COMMERCE: ${usableVariants.length} regional creative directions rendered — awaiting brand manager pick.`);
       setShowAssets(true);
-      setSimProgressStep(4);
+      // Stays at 3/4 — creative is written, but compliance (step 4) hasn't
+      // run yet and won't until the brand manager picks a direction.
       setAgentStates((p) => ({ ...p, echo: "done", bhasha: "done", maker: "gate", commerce: "done" }));
       setAgentTimes((p) => ({ ...p, echo: getTS(), bhasha: getTS(), commerce: getTS() }));
 
@@ -675,7 +677,7 @@ export default function App() {
     }
     addLog("MAKER: Live creative generation unavailable — using cached regional assets.");
     setShowAssets(true);
-    setSimProgressStep(4);
+    // Stays at 3/4 until runSentinelAndFinalize's compliance check actually clears.
     setAgentStates((p) => ({ ...p, echo: "done", bhasha: "done", maker: "done", commerce: "done" }));
     setAgentTimes((p) => ({ ...p, echo: getTS(), bhasha: getTS(), maker: getTS(), commerce: getTS() }));
 
@@ -721,6 +723,7 @@ export default function App() {
 
     setIsRunning(false);
     setIsCompleted(true);
+    setSimProgressStep(4);
     if (timerRef.current) clearInterval(timerRef.current);
 
     finalizeTrigger({ verdict: verdictText, kpis: kpiTriples, assets: updatedAssets, provider: providerLabel });
@@ -736,6 +739,7 @@ export default function App() {
 
     setIsRunning(false);
     setIsCompleted(true);
+    setSimProgressStep(4);
     if (timerRef.current) clearInterval(timerRef.current);
 
     finalizeTrigger({ verdict: verdictText, kpis: kpiTriples, assets: currentAssets, provider: providerLabel });
@@ -751,6 +755,7 @@ export default function App() {
 
     setIsRunning(false);
     setIsCompleted(true);
+    setSimProgressStep(4);
     if (timerRef.current) clearInterval(timerRef.current);
 
     finalizeTrigger({ verdict: verdictText, kpis: kpiTriples, assets: currentAssets, provider: providerLabel });
@@ -902,6 +907,7 @@ export default function App() {
               onContinueToSummary={handleContinueToSummary}
               onOpenGateModal={() => setIsSentinelModalOpen(true)}
               simProgressStep={simProgressStep}
+              awaitingApproval={!!variantOptions}
               flaggedClaim={flaggedClaim}
               liveModeStatus={liveModeStatus}
               providerLabel={providerLabel}
