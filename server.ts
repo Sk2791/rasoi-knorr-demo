@@ -9,7 +9,9 @@ import { CLUSTERS, TRIGGERS as SEED_TRIGGERS, ASSETS } from "./src/data/mockData
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+// Render (and most PaaS hosts) assign the port dynamically via $PORT and
+// route external traffic to it — a hardcoded 3000 would fail to bind there.
+const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json());
 
@@ -27,7 +29,10 @@ const PRODUCT_CONSTRAINT =
 // One table holds every trigger — pending (AI-detected, awaiting review),
 // saved (deferred), approved (live, with its run result), or cancelled.
 // ---------------------------------------------------------------------------
-const db = new DatabaseSync(path.join(process.cwd(), "rasoi.db"));
+// DB_PATH lets a host with a persistent disk (e.g. Render, mounted at /data)
+// point the database somewhere that survives redeploys — falls back to the
+// project root for local dev, matching the previous behavior exactly.
+const db = new DatabaseSync(process.env.DB_PATH || path.join(process.cwd(), "rasoi.db"));
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS triggers (
