@@ -317,6 +317,9 @@ Generate a structured JSON object with:
       prompt
     );
     const data = JSON.parse(text);
+    const img = await generateAssetImage(
+      buildAssetImagePrompt(city, data.tasteNote || tasteNote, eventContext || guidance || "A regional demand campaign")
+    );
     res.json({
       success: true,
       asset: {
@@ -325,6 +328,7 @@ Generate a structured JSON object with:
         englishMeaning: data.englishMeaning,
         tasteNote: data.tasteNote,
         badge: data.badge || "Live · Fresh Take",
+        ...(img ? { img } : {}),
       },
       provider,
     });
@@ -595,6 +599,63 @@ async function generateAI(
   }
 
   throw new Error("No AI provider available (Gemini failed/unset and GROQ_API_KEY not configured).");
+}
+
+function getXaiApiKey(): string | null {
+  return process.env.XAI_API_KEY || null;
+}
+
+// Generates one photorealistic banner background via xAI's Grok image model,
+// grounded in this specific asset's city/flavor. Returns null (never throws)
+// if the key isn't configured or the call fails for any reason — the caller
+// falls back to the bundled stock-photo pool, matching how every other AI
+// call in this app degrades rather than breaking the demo.
+async function generateAssetImage(prompt: string): Promise<string | null> {
+  const apiKey = getXaiApiKey();
+  if (!apiKey) return null;
+  try {
+    const res = await fetch("https://api.x.ai/v1/images/generations", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "grok-imagine-image-2.0",
+        prompt,
+        n: 1,
+        // base64 (not a hosted url) so the image is self-contained once
+        // stored — a signed/temporary url would eventually link-rot in History.
+        response_format: "b64_json",
+      }),
+    });
+    if (!res.ok) {
+      console.warn(`xAI image generation failed (${res.status}): ${await res.text()}`);
+      return null;
+    }
+    const data = await res.json();
+    const b64 = data.data?.[0]?.b64_json;
+    return b64 ? `data:image/jpeg;base64,${b64}` : null;
+  } catch (err: any) {
+    console.warn("xAI image generation error:", err?.message || err);
+    return null;
+  }
+}
+
+function buildAssetImagePrompt(city: string, tasteNote: string | undefined, eventContext: string): string {
+  return `Professional appetizing food photography of a steaming hot bowl of soup, ${tasteNote || "warm and comforting"}, warm golden lighting, shallow depth of field, styled as a lifestyle banner-ad background evoking ${city}, India and the mood of "${eventContext}". Photorealistic, no text, no logos, no watermarks, no readable words anywhere in the image.`;
+}
+
+// Fires one image-generation call per asset, in parallel, and attaches the
+// result as asset.img. A no-op (near-instant) when XAI_API_KEY isn't set —
+// generateAssetImage returns null immediately without a network call.
+async function attachGeneratedImages(assets: any[], eventContext: string): Promise<void> {
+  await Promise.all(
+    assets.map(async (asset) => {
+      const url = await generateAssetImage(buildAssetImagePrompt(asset.city || asset.c, asset.tasteNote, eventContext));
+      if (url) asset.img = url;
+    })
+  );
 }
 
 // Fallback trigger generator for when AI models are unavailable or experiencing 503 spikes
@@ -970,8 +1031,14 @@ ${groundingParagraph}`;
       if (Array.isArray(firstAssets) && Array.isArray(data.kpis) && data.kpis[1]) {
         data.kpis[1] = [String(firstAssets.length), "Regional Versions", "Tailored"];
       }
+      await Promise.all(
+        data.variants.map((v: any) =>
+          Array.isArray(v.assets) ? attachGeneratedImages(v.assets, eventDescription) : Promise.resolve()
+        )
+      );
     } else if (Array.isArray(data.assets) && Array.isArray(data.kpis) && data.kpis[1]) {
       data.kpis[1] = [String(data.assets.length), "Regional Versions", "Tailored"];
+      await attachGeneratedImages(data.assets, eventDescription);
     }
     res.json({ success: true, data, provider });
   } catch (err: any) {

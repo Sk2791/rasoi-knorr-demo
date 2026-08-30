@@ -26,6 +26,11 @@ export interface Asset {
   // track record of "is the AI's output actually good" ahead of ever wiring
   // up real campaign-performance feedback.
   feedback?: "up" | "down";
+  // AI-generated (xAI Grok) banner background, as a data: URI so it's
+  // self-contained and never link-rots in History. Generated once at
+  // creation time; absent means generation failed or wasn't configured, in
+  // which case the card falls back to the bundled stock-photo pool.
+  img?: string;
 }
 
 // One of several distinct creative directions MAKER proposes for the same

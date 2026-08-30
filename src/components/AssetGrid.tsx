@@ -503,7 +503,10 @@ interface LayoutProps {
 // Layout 1: today's composition, refined — full-bleed photo (or gradient
 // fallback), headline bottom-left.
 const BoldHeadlineArt: React.FC<LayoutProps> = ({ a, palette, theme, gradId, patternId, seed }) => {
-  const photo = getCardPhoto(a.c, theme, seed);
+  // The AI-generated (xAI Grok) photo takes priority when present; falls
+  // back to the bundled stock-photo pool if generation failed or wasn't
+  // configured for this asset.
+  const photo = a.img || getCardPhoto(a.c, theme, seed);
   const hasPhoto = !!photo;
   return (
     <>
@@ -540,7 +543,10 @@ const BoldHeadlineArt: React.FC<LayoutProps> = ({ a, palette, theme, gradId, pat
 // Layout 2: photo (or gradient) art band on top, headline in a flat color
 // band below — text never sits over the photo, so no scrim needed here.
 const SplitVisualArt: React.FC<LayoutProps> = ({ a, palette, theme, gradId, patternId, seed }) => {
-  const photo = getCardPhoto(a.c, theme, seed);
+  // The AI-generated (xAI Grok) photo takes priority when present; falls
+  // back to the bundled stock-photo pool if generation failed or wasn't
+  // configured for this asset.
+  const photo = a.img || getCardPhoto(a.c, theme, seed);
   const hasPhoto = !!photo;
   return (
     <>
@@ -570,7 +576,10 @@ const SplitVisualArt: React.FC<LayoutProps> = ({ a, palette, theme, gradId, patt
 
 // Layout 3: full photo (or flat color) card, icon medallion top-center, headline centered, format as a corner ribbon.
 const MinimalBadgeArt: React.FC<LayoutProps> = ({ a, palette, theme, gradId, patternId, seed }) => {
-  const photo = getCardPhoto(a.c, theme, seed);
+  // The AI-generated (xAI Grok) photo takes priority when present; falls
+  // back to the bundled stock-photo pool if generation failed or wasn't
+  // configured for this asset.
+  const photo = a.img || getCardPhoto(a.c, theme, seed);
   const hasPhoto = !!photo;
   return (
   <>
@@ -659,6 +668,7 @@ export const AssetGrid: React.FC<AssetGridProps> = ({
                 englishMeaning: data.asset.englishMeaning || a.englishMeaning,
                 tasteNote: data.asset.tasteNote || a.tasteNote,
                 badge: data.asset.badge || a.badge,
+                img: data.asset.img || a.img,
               }
             : a
         );
