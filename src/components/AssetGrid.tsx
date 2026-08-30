@@ -532,7 +532,10 @@ const BoldHeadlineArt: React.FC<LayoutProps> = ({ a, palette, theme, gradId, pat
         <LandmarkIcon clusterCode={a.c} x={195} y={112} scale={2.2} />
       )}
       <ProductPackMark x={244} y={118} />
-      <ThemeIcon theme={theme} cx={225} cy={40} />
+      {/* Redundant clutter over a real, specific photo that already conveys
+          the theme — only useful as a decorative motif on a generic
+          gradient/stock background. */}
+      {!a.img && <ThemeIcon theme={theme} cx={225} cy={40} />}
       <WrappedText text={a.head} x={16} y={98} fontSize={16} maxChars={20} lineHeight={19} />
       <text x="16" y="130" fontSize="9.5" fontWeight="500" fill="#ffffff" opacity="0.92">
         {(a.sub || "").slice(0, 46)}
@@ -573,7 +576,7 @@ const SplitVisualArt: React.FC<LayoutProps> = ({ a, palette, theme, gradId, patt
       {!hasPhoto && <LandmarkIcon clusterCode={a.c} x={155} y={86} scale={1.6} />}
       <rect y="92" width="280" height="68" fill={palette[0]} />
       <ProductPackMark x={16} y={40} scale={0.9} />
-      <ThemeIcon theme={theme} cx={236} cy={44} scale={1.15} />
+      {!a.img && <ThemeIcon theme={theme} cx={236} cy={44} scale={1.15} />}
       <WrappedText text={a.head} x={16} y={122} fontSize={14} maxChars={24} lineHeight={16} anchor="start" />
       <text x="16" y="148" fontSize="9" fontWeight="500" fill="#ffffff" opacity="0.85">
         {(a.sub || "").slice(0, 42)}
@@ -607,9 +610,13 @@ const MinimalBadgeArt: React.FC<LayoutProps> = ({ a, palette, theme, gradId, pat
       <LandmarkIcon clusterCode={a.c} x={140} y={155} scale={2.4} opacity={0.16} />
     )}
     <ProductPackMark x={20} y={130} scale={0.85} />
-    <circle cx="140" cy="44" r="27" fill={palette[1]} opacity="0.22" />
-    <circle cx="140" cy="44" r="18" fill={palette[1]} opacity="0.92" />
-    <ThemeIcon theme={theme} cx={140} cy={44} scale={0.85} />
+    {!a.img && (
+      <>
+        <circle cx="140" cy="44" r="27" fill={palette[1]} opacity="0.22" />
+        <circle cx="140" cy="44" r="18" fill={palette[1]} opacity="0.92" />
+        <ThemeIcon theme={theme} cx={140} cy={44} scale={0.85} />
+      </>
+    )}
     <WrappedText
       text={a.head}
       x={140}

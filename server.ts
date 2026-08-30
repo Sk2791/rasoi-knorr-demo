@@ -13,7 +13,12 @@ const app = express();
 // route external traffic to it — a hardcoded 3000 would fail to bind there.
 const PORT = Number(process.env.PORT) || 3000;
 
-app.use(express.json());
+// Express's default body limit is 100kb — fine for plain text/JSON, but a
+// run's assets now embed base64 AI-generated images (a few hundred KB each),
+// so saving a finished run's runResult (many assets x one image each) can
+// run into several MB. Without raising this, that PATCH silently 413s and
+// the completed run never persists, even though generation itself succeeded.
+app.use(express.json({ limit: "50mb" }));
 
 // RASOI only ever advertises Knorr instant soup — never any other Knorr line
 // or unrelated food category. Without an explicit anchor like this, the AI
@@ -635,7 +640,7 @@ async function generateAssetImage(prompt: string): Promise<string | null> {
   // image before responding, one stuck call would stall the ENTIRE run, not
   // just that one card's photo.
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 20000);
+  const timeout = setTimeout(() => controller.abort(), 25000);
   try {
     const res = await fetch("https://api.x.ai/v1/images/generations", {
       method: "POST",
@@ -661,7 +666,7 @@ async function generateAssetImage(prompt: string): Promise<string | null> {
     const b64 = data.data?.[0]?.b64_json;
     return b64 ? `data:image/jpeg;base64,${b64}` : null;
   } catch (err: any) {
-    console.warn("xAI image generation error:", err?.name === "AbortError" ? "timed out after 20s" : err?.message || err);
+    console.warn("xAI image generation error:", err?.name === "AbortError" ? "timed out after 25s" : err?.message || err);
     return null;
   } finally {
     clearTimeout(timeout);
@@ -683,16 +688,24 @@ function buildAssetImagePrompt(
   return `Photorealistic lifestyle photograph. ${scene}. Setting: ${place}, India — the location, weather, lighting and mood must visibly and specifically match this situation, not a generic indoor kitchen shot. A steaming hot bowl of soup is the clear focal point${asset.tasteNote ? `, styled with ${asset.tasteNote}` : ""}. Warm natural lighting, shallow depth of field, high detail, magazine-quality food and lifestyle photography, nothing else drawn or overlaid on top. Absolutely no text, no logos, no watermarks, no readable words, no illustrations or graphic overlays anywhere in the image — pure photography only.`;
 }
 
-// Fires one image-generation call per asset, in parallel, and attaches the
-// result as asset.img. A no-op (near-instant) when XAI_API_KEY isn't set —
-// generateAssetImage returns null immediately without a network call.
+// Fires image-generation calls in small concurrent batches (not all at once)
+// and attaches each result as asset.img. A no-op (near-instant) when
+// XAI_API_KEY isn't set — generateAssetImage returns null immediately without
+// a network call. Batching matters: firing 10+ simultaneous requests at xAI
+// under one API key (e.g. 2 variants x 5-6 clusters each) measurably caused
+// individual calls to queue past the 20s timeout and fail — 3 at a time keeps
+// every request within a normal response window.
+const IMAGE_GEN_CONCURRENCY = 3;
 async function attachGeneratedImages(assets: any[], eventContext: string): Promise<void> {
-  await Promise.all(
-    assets.map(async (asset) => {
-      const url = await generateAssetImage(buildAssetImagePrompt(asset, eventContext));
-      if (url) asset.img = url;
-    })
-  );
+  for (let i = 0; i < assets.length; i += IMAGE_GEN_CONCURRENCY) {
+    const batch = assets.slice(i, i + IMAGE_GEN_CONCURRENCY);
+    await Promise.all(
+      batch.map(async (asset) => {
+        const url = await generateAssetImage(buildAssetImagePrompt(asset, eventContext));
+        if (url) asset.img = url;
+      })
+    );
+  }
 }
 
 // Fallback trigger generator for when AI models are unavailable or experiencing 503 spikes
@@ -1068,11 +1081,12 @@ ${groundingParagraph}`;
       if (Array.isArray(firstAssets) && Array.isArray(data.kpis) && data.kpis[1]) {
         data.kpis[1] = [String(firstAssets.length), "Regional Versions", "Tailored"];
       }
-      await Promise.all(
-        data.variants.map((v: any) =>
-          Array.isArray(v.assets) ? attachGeneratedImages(v.assets, eventDescription) : Promise.resolve()
-        )
-      );
+      // Flattened across every variant so the concurrency cap applies
+      // globally (e.g. 2 variants x 6 clusters = 12 assets, batched 3 at a
+      // time) instead of once per variant, which would still allow multiple
+      // variants' batches to run concurrently against each other.
+      const allVariantAssets = data.variants.flatMap((v: any) => (Array.isArray(v.assets) ? v.assets : []));
+      await attachGeneratedImages(allVariantAssets, eventDescription);
     } else if (Array.isArray(data.assets) && Array.isArray(data.kpis) && data.kpis[1]) {
       data.kpis[1] = [String(data.assets.length), "Regional Versions", "Tailored"];
       await attachGeneratedImages(data.assets, eventDescription);
