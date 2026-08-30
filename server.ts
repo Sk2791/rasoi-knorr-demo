@@ -613,9 +613,16 @@ function getXaiApiKey(): string | null {
 async function generateAssetImage(prompt: string): Promise<string | null> {
   const apiKey = getXaiApiKey();
   if (!apiKey) return null;
+  // Without a hard timeout, a slow/unreachable xAI endpoint would hang this
+  // fetch indefinitely — and since the creative pipeline awaits every asset's
+  // image before responding, one stuck call would stall the ENTIRE run, not
+  // just that one card's photo.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20000);
   try {
     const res = await fetch("https://api.x.ai/v1/images/generations", {
       method: "POST",
+      signal: controller.signal,
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
@@ -637,8 +644,10 @@ async function generateAssetImage(prompt: string): Promise<string | null> {
     const b64 = data.data?.[0]?.b64_json;
     return b64 ? `data:image/jpeg;base64,${b64}` : null;
   } catch (err: any) {
-    console.warn("xAI image generation error:", err?.message || err);
+    console.warn("xAI image generation error:", err?.name === "AbortError" ? "timed out after 20s" : err?.message || err);
     return null;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
