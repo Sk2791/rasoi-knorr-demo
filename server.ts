@@ -929,7 +929,7 @@ ${clusterBrief}
 
 Generate a structured JSON object with:
 1. verdict: A 1-sentence predicted category offtake summary, prefixed with "✓".
-2. kpis: Array of exactly 6 tuples [valueStr, labelStr, unitStr] covering launch speed, regional versions, store reach, governance touches, compute cost, and predicted sales lift.
+2. kpis: Array of exactly 6 tuples [valueStr, labelStr, unitStr] covering launch speed, regional versions, store reach, governance touches, compute cost, and predicted sales lift. The launch speed / turnaround KPI is THE core value proposition of this product (AI-generated regional campaigns in minutes instead of an agency's weeks) — it MUST be a small number of minutes (e.g. "4", "min") or at most hours, NEVER days or weeks; a multi-day figure would contradict the entire pitch of this tool.
 ${outputSpec}
 
 ${groundingParagraph}`;
