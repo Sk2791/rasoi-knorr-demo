@@ -645,37 +645,67 @@ async function generateAI(
 // (The standalone Imagen `generateImages` API was tried first, but it's only
 // reachable via Vertex AI/Enterprise auth, not a plain Gemini API key — this
 // uses the multimodal `generateContent` path instead, which is.) Returns
-// null (never throws) if the key isn't configured or the call fails for any
-// reason — the caller falls back to the bundled stock-photo pool, matching
-// how every other AI call in this app degrades rather than breaking the demo.
+// null (never throws) if the key isn't configured or every attempt fails —
+// the caller falls back to the bundled stock-photo pool, matching how every
+// other AI call in this app degrades rather than breaking the demo.
+//
+// Retries transient 503/"high demand"/UNAVAILABLE responses and timeouts
+// with a short backoff, mirroring generateContentWithRetry's text-generation
+// pattern — Gemini's own error message calls these spikes temporary, and
+// without a retry here every single one of them was silently and
+// permanently falling back to a stock photo instead of recovering.
 async function generateAssetImage(prompt: string): Promise<string | null> {
   const ai = getGeminiClient();
   if (!ai) return null;
-  // Without a hard timeout, a slow/unreachable endpoint would hang this call
-  // indefinitely — and since the creative pipeline awaits every asset's image
-  // before responding, one stuck call would stall the ENTIRE run, not just
-  // that one card's photo.
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 25000);
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3.1-flash-image",
-      contents: prompt,
-      config: {
-        responseModalities: ["IMAGE"],
-        abortSignal: controller.signal,
-      },
-    });
-    const parts = response.candidates?.[0]?.content?.parts || [];
-    const imagePart = parts.find((p: any) => p.inlineData?.data);
-    if (!imagePart?.inlineData?.data) return null;
-    return `data:${imagePart.inlineData.mimeType || "image/jpeg"};base64,${imagePart.inlineData.data}`;
-  } catch (err: any) {
-    console.warn("Gemini image generation error:", err?.name === "AbortError" ? "timed out after 25s" : err?.message || err);
-    return null;
-  } finally {
-    clearTimeout(timeout);
+
+  const MAX_ATTEMPTS = 3;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    // Without a hard timeout, a slow/unreachable endpoint would hang this
+    // call indefinitely — and since the creative pipeline awaits every
+    // asset's image before responding, one stuck call would stall the
+    // ENTIRE run, not just that one card's photo.
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 25000);
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-3.1-flash-image",
+        contents: prompt,
+        config: {
+          responseModalities: ["IMAGE"],
+          abortSignal: controller.signal,
+        },
+      });
+      const parts = response.candidates?.[0]?.content?.parts || [];
+      const imagePart = parts.find((p: any) => p.inlineData?.data);
+      return imagePart?.inlineData?.data
+        ? `data:${imagePart.inlineData.mimeType || "image/jpeg"};base64,${imagePart.inlineData.data}`
+        : null;
+    } catch (err: any) {
+      const isTimeout = err?.name === "AbortError";
+      const errMsg = err?.message || String(err);
+      const is503OrBusy =
+        err?.status === 503 ||
+        err?.code === 503 ||
+        err?.status === 429 ||
+        errMsg.includes("503") ||
+        errMsg.includes("high demand") ||
+        errMsg.includes("UNAVAILABLE");
+
+      if ((isTimeout || is503OrBusy) && attempt < MAX_ATTEMPTS - 1) {
+        console.warn(`Gemini image generation attempt ${attempt + 1} failed (${isTimeout ? "timeout" : "503/busy"}), retrying...`);
+        // Longer backoff than the text-generation retry: observed demand
+        // spikes on the image model have lasted well over a minute in
+        // practice, so a sub-second gap between attempts rarely helps.
+        await new Promise((resolve) => setTimeout(resolve, 1500 * (attempt + 1)));
+        continue;
+      }
+      console.warn("Gemini image generation error:", isTimeout ? "timed out after 25s" : errMsg);
+      return null;
+    } finally {
+      clearTimeout(timeout);
+    }
   }
+  return null;
 }
 
 function buildAssetImagePrompt(
