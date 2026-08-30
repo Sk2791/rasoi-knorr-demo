@@ -870,9 +870,11 @@ Market trigger event: "${eventDescription}"
 Region/Context: "${region || "India"}"
 Live signals detected by SCOUT: ${signalSummary || "N/A"}
 
+${PRODUCT_CONSTRAINT}
+
 Generate a structured JSON object with:
 1. opp: A 1-2 sentence auto-generated occasion card summarizing the meal-occasion opportunity and regional taste consideration.
-2. scores: Array of exactly 4 strings [Occasion Fit %, Velocity %, Risk level (e.g. "Low Risk"), Revenue Headroom in ₹cr e.g. "₹14.2cr"]`;
+2. scores: Array of exactly 3 strings [Occasion Fit %, Velocity %, Risk level (e.g. "Low Risk")] — qualitative confidence signals only. Do NOT include a rupee/revenue figure here; that would be a second, uncoordinated guess at a number this app already states elsewhere with real justification.`;
 
   try {
     const { text, provider } = await generateAI(

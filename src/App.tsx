@@ -175,7 +175,7 @@ export default function App() {
   const [agentStates, setAgentStates] = useState<Record<string, "queued" | "running" | "done" | "gate">>({});
   const [agentTimes, setAgentTimes] = useState<Record<string, string>>({});
   const [occasionQuote, setOccasionQuote] = useState<string>("—");
-  const [occasionScores, setOccasionScores] = useState<string[]>(["—", "—", "—", "—"]);
+  const [occasionScores, setOccasionScores] = useState<string[]>(["—", "—", "—"]);
   const [logs, setLogs] = useState<string[]>([]);
 
   const [selectedClusterIndex, setSelectedClusterIndex] = useState<number | null>(null);
@@ -590,13 +590,13 @@ export default function App() {
 
     if (liveOpp) {
       setOccasionQuote(liveOpp);
-      setOccasionScores(liveScores || activeTrigger.scores || ["94%", "96%", "Low Risk", "₹14.2cr"]);
+      setOccasionScores(liveScores || activeTrigger.scores || ["94%", "96%", "Low Risk"]);
       if (oppRes.provider) providersUsed.add(oppRes.provider);
       addLog("ARBITER: Quantified meal-occasion value and stock cover across 18,400 outlets.");
     } else {
       notifyFallback();
       setOccasionQuote(activeTrigger.opp || "Regional demand opportunity quantified.");
-      setOccasionScores(activeTrigger.scores || ["94%", "96%", "Low Risk", "₹14.2cr"]);
+      setOccasionScores(activeTrigger.scores || ["94%", "96%", "Low Risk"]);
       addLog("ARBITER: Live scoring unavailable — using cached opportunity baseline.");
     }
     setAgentStates((p) => ({ ...p, arbiter: "done" }));
@@ -908,6 +908,8 @@ export default function App() {
               onOpenGateModal={() => setIsSentinelModalOpen(true)}
               simProgressStep={simProgressStep}
               awaitingApproval={!!variantOptions}
+              occasionQuote={occasionQuote}
+              occasionScores={occasionScores}
               flaggedClaim={flaggedClaim}
               liveModeStatus={liveModeStatus}
               providerLabel={providerLabel}
