@@ -508,6 +508,10 @@ const BoldHeadlineArt: React.FC<LayoutProps> = ({ a, palette, theme, gradId, pat
   // configured for this asset.
   const photo = a.img || getCardPhoto(a.c, theme, seed);
   const hasPhoto = !!photo;
+  // Stock photos need a heavier color tint to blend with the theme palette;
+  // a real AI-generated photo is already grounded in this specific asset's
+  // place/situation, so a heavy color wash just obscures it — keep it clear.
+  const photoTint = a.img ? 0.12 : undefined;
   return (
     <>
       <defs>
@@ -517,7 +521,7 @@ const BoldHeadlineArt: React.FC<LayoutProps> = ({ a, palette, theme, gradId, pat
         </linearGradient>
       </defs>
       {hasPhoto ? (
-        <CardPhoto photo={photo} x={0} y={0} width={280} height={160} gradId={gradId} palette={palette} />
+        <CardPhoto photo={photo} x={0} y={0} width={280} height={160} gradId={gradId} palette={palette} tintOpacity={photoTint} />
       ) : (
         <rect width="280" height="160" fill={`url(#${gradId})`} />
       )}
@@ -548,6 +552,10 @@ const SplitVisualArt: React.FC<LayoutProps> = ({ a, palette, theme, gradId, patt
   // configured for this asset.
   const photo = a.img || getCardPhoto(a.c, theme, seed);
   const hasPhoto = !!photo;
+  // Stock photos need a heavier color tint to blend with the theme palette;
+  // a real AI-generated photo is already grounded in this specific asset's
+  // place/situation, so a heavy color wash just obscures it — keep it clear.
+  const photoTint = a.img ? 0.12 : undefined;
   return (
     <>
       <defs>
@@ -557,7 +565,7 @@ const SplitVisualArt: React.FC<LayoutProps> = ({ a, palette, theme, gradId, patt
         </linearGradient>
       </defs>
       {hasPhoto ? (
-        <CardPhoto photo={photo} x={0} y={0} width={280} height={92} gradId={gradId} palette={palette} tintOpacity={0.55} />
+        <CardPhoto photo={photo} x={0} y={0} width={280} height={92} gradId={gradId} palette={palette} tintOpacity={photoTint ?? 0.55} />
       ) : (
         <rect width="280" height="92" fill={`url(#${gradId})`} />
       )}
@@ -581,10 +589,14 @@ const MinimalBadgeArt: React.FC<LayoutProps> = ({ a, palette, theme, gradId, pat
   // configured for this asset.
   const photo = a.img || getCardPhoto(a.c, theme, seed);
   const hasPhoto = !!photo;
+  // Stock photos need a heavier color tint to blend with the theme palette;
+  // a real AI-generated photo is already grounded in this specific asset's
+  // place/situation, so a heavy color wash just obscures it — keep it clear.
+  const photoTint = a.img ? 0.12 : undefined;
   return (
   <>
     {hasPhoto ? (
-      <CardPhoto photo={photo} x={0} y={0} width={280} height={160} gradId={gradId} palette={palette} tintOpacity={0.68} />
+      <CardPhoto photo={photo} x={0} y={0} width={280} height={160} gradId={gradId} palette={palette} tintOpacity={photoTint ?? 0.68} />
     ) : (
       <rect width="280" height="160" fill={palette[0]} />
     )}

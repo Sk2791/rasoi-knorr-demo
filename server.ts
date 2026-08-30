@@ -318,7 +318,10 @@ Generate a structured JSON object with:
     );
     const data = JSON.parse(text);
     const img = await generateAssetImage(
-      buildAssetImagePrompt(city, data.tasteNote || tasteNote, eventContext || guidance || "A regional demand campaign")
+      buildAssetImagePrompt(
+        { city, tasteNote: data.tasteNote || tasteNote, englishMeaning: data.englishMeaning },
+        eventContext || guidance || "A regional demand campaign"
+      )
     );
     res.json({
       success: true,
@@ -665,8 +668,19 @@ async function generateAssetImage(prompt: string): Promise<string | null> {
   }
 }
 
-function buildAssetImagePrompt(city: string, tasteNote: string | undefined, eventContext: string): string {
-  return `Professional appetizing food photography of a steaming hot bowl of soup, ${tasteNote || "warm and comforting"}, warm golden lighting, shallow depth of field, styled as a lifestyle banner-ad background evoking ${city}, India and the mood of "${eventContext}". Photorealistic, no text, no logos, no watermarks, no readable words anywhere in the image.`;
+function buildAssetImagePrompt(
+  asset: { city?: string; c?: string; tasteNote?: string; englishMeaning?: string },
+  eventContext: string
+): string {
+  const place = asset.city || asset.c || "India";
+  // Grounded in englishMeaning (the actual ad's message) rather than just
+  // city+flavor, so the photo's place/situation/mood visibly matches what
+  // the headline says — a generic soup-bowl shot would read as disconnected
+  // from copy about, say, a rainy Mumbai evening or a cricket-night snack run.
+  const scene = asset.englishMeaning
+    ? `Capture this exact scene and mood: "${asset.englishMeaning}"`
+    : `Capture a scene fitting "${eventContext}"`;
+  return `Photorealistic lifestyle photograph. ${scene}. Setting: ${place}, India — the location, weather, lighting and mood must visibly and specifically match this situation, not a generic indoor kitchen shot. A steaming hot bowl of soup is the clear focal point${asset.tasteNote ? `, styled with ${asset.tasteNote}` : ""}. Warm natural lighting, shallow depth of field, high detail, magazine-quality food and lifestyle photography, nothing else drawn or overlaid on top. Absolutely no text, no logos, no watermarks, no readable words, no illustrations or graphic overlays anywhere in the image — pure photography only.`;
 }
 
 // Fires one image-generation call per asset, in parallel, and attaches the
@@ -675,7 +689,7 @@ function buildAssetImagePrompt(city: string, tasteNote: string | undefined, even
 async function attachGeneratedImages(assets: any[], eventContext: string): Promise<void> {
   await Promise.all(
     assets.map(async (asset) => {
-      const url = await generateAssetImage(buildAssetImagePrompt(asset.city || asset.c, asset.tasteNote, eventContext));
+      const url = await generateAssetImage(buildAssetImagePrompt(asset, eventContext));
       if (url) asset.img = url;
     })
   );
