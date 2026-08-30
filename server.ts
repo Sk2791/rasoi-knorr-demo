@@ -307,9 +307,11 @@ ${
     : "Write a genuinely different creative angle and wording than a typical execution — vary whether it leads with weather, occasion, price, or a taste callout, and vary the sentence structure."
 }
 
-Give the native-language headline and subheading a fun, playful BOLLYWOOD-STYLE flair — punchy, rhythmic phrasing, a bit of filmy drama or wordplay — rather than a flat, literal, corporate-sounding translation.
+WRITE LIKE A ZOMATO/SWIGGY PUSH NOTIFICATION, NOT A BILLBOARD: short, personalized, witty-with-a-filmy-twist — the way those apps talk directly to YOU, tease you, catch you mid-scroll — not a formal, descriptive advertisement sentence. Address the reader directly (tu/tumhara/aapka register, not third-person), keep the headline notification-length and punchy, and let the subheading carry the specific product/taste detail.
 
 CULTURAL AUTHENTICITY IS NOT OPTIONAL: a literal translation is NOT enough — weave in a genuine, verifiable CULTURAL reference specific to this region, not just a flavor cue: a regional festival/seasonal occasion actually relevant now, a well-known local idiom/proverb, a beloved regional cricket/cinema/music reference, or a distinctly local turn of phrase. Name exactly which reference you used — "local culture" or "regional traditions" are not acceptable answers.
+
+Every headline and subheading MUST read like something a native speaker of ${lang} would actually write — correct grammar, natural word order, real idiom — never a stiff, word-for-word translation from English.
 
 Generate a structured JSON object with:
 1. head: headline written IN the local language/script (${lang})
@@ -325,12 +327,19 @@ Generate a structured JSON object with:
       prompt
     );
     const data = JSON.parse(text);
-    const img = await generateAssetImage(
-      buildAssetImagePrompt(
-        { city, tasteNote: data.tasteNote || tasteNote, englishMeaning: data.englishMeaning },
-        eventContext || guidance || "A regional demand campaign"
-      )
-    );
+    const qaTarget = [{ head: data.head, sub: data.sub, culturalNote: data.culturalNote, city, lang }];
+    const [img] = await Promise.all([
+      generateAssetImage(
+        buildAssetImagePrompt(
+          { city, tasteNote: data.tasteNote || tasteNote, englishMeaning: data.englishMeaning },
+          eventContext || guidance || "A regional demand campaign"
+        )
+      ),
+      verifyAndFixLocalLanguage(qaTarget),
+    ]);
+    data.head = qaTarget[0].head;
+    data.sub = qaTarget[0].sub;
+    data.culturalNote = qaTarget[0].culturalNote;
     res.json({
       success: true,
       asset: {
@@ -704,6 +713,56 @@ async function attachGeneratedImages(assets: any[], eventContext: string): Promi
   }
 }
 
+// Runs a second, independent Gemini pass acting as a native-speaker copy
+// editor: catches literal/awkward translations that would read as "off" to
+// an actual native speaker, and checks the copy genuinely reads like a
+// punchy, personalized Zomato/Swiggy-style notification rather than a stiff
+// formal ad line. Corrects head/sub IN PLACE only where something's wrong;
+// leaves already-good copy untouched. Never throws — a failed check just
+// means the original copy stands, same as every other AI call in this app.
+async function verifyAndFixLocalLanguage(assets: any[]): Promise<void> {
+  if (!Array.isArray(assets) || assets.length === 0) return;
+
+  const list = assets
+    .map(
+      (a, i) =>
+        `${i + 1}. [${a.city}, ${a.lang}] head: "${a.head}" | sub: "${a.sub}" | cultural reference claimed: "${a.culturalNote || "none"}"`
+    )
+    .join("\n");
+
+  const prompt = `You are a native-speaking copy editor and fact-checker for Indian regional languages, reviewing Knorr soup ad snippets meant to read like Zomato/Swiggy push notifications.
+
+For EACH numbered asset below, check THREE things:
+1. GRAMMAR & NATURALNESS: does the head/sub read like something a native speaker of that exact language/script would actually write — correct grammar, natural word order, real idiom — or does it read like a stiff, literal, word-for-word translation from English?
+2. TONE: does it feel like a short, punchy, PERSONALIZED food-delivery-app push notification with a witty or filmy hook (the way Zomato/Swiggy notifications talk directly to you, tease you, make you smile) — or does it read like a flat, formal, generic advertisement line?
+3. CULTURAL REFERENCE ACCURACY: is the claimed cultural reference actually genuine and correctly attributed — a real idiom/festival/phrase that truly belongs to THAT specific language and region (not borrowed or misattributed from a different Indian language or state, e.g. calling a Tamil phrase "Telugu")? If it's factually wrong or misattributed, replace it with a genuine one that actually fits that language/region, or state "none" if you cannot verify one.
+
+Assets:
+${list}
+
+If ANY check fails for an asset, fix it — keep the same city, language/script, and core product/taste detail, just correct the grammar, sharpen the tone, and/or fix the cultural reference attribution. If an asset already passes all three checks, return it completely unchanged.
+
+Return a JSON array with exactly ${assets.length} objects in the SAME ORDER as listed above, each: { head: string, sub: string, culturalNote: string, fixed: boolean (true only if you changed anything) }`;
+
+  try {
+    const { text } = await generateAI(
+      "Return a valid JSON array reviewing and correcting local-language ad copy for grammar, tone, and cultural-reference accuracy.",
+      prompt
+    );
+    const parsed = JSON.parse(text);
+    const corrections = Array.isArray(parsed) ? parsed : parsed.assets || parsed.corrections;
+    if (!Array.isArray(corrections)) return;
+    corrections.forEach((c: any, i: number) => {
+      if (!assets[i] || !c) return;
+      if (c.head) assets[i].head = c.head;
+      if (c.sub) assets[i].sub = c.sub;
+      if (c.culturalNote) assets[i].culturalNote = c.culturalNote;
+    });
+  } catch (err: any) {
+    console.warn("Local-language QA pass failed, keeping original copy:", err?.message || err);
+  }
+}
+
 // Fallback trigger generator for when AI models are unavailable or experiencing 503 spikes
 function generateFallbackTrigger(eventDescription: string, region: string = "India") {
   const cleanDesc = eventDescription.trim();
@@ -1042,9 +1101,13 @@ app.post("/api/pipeline/creative", async (req, res) => {
 
   const assetShape = `{ c: string (the exact cluster code given above), city: string (a real specific city within that cluster), lang: string (the exact language given above, e.g. "Hindi (hi-IN)"), fmt: string (ad format e.g. "1:1 Quick Feed", "9:16 Reel"), head: string (headline written IN the local language/script), sub: string (subheading in local language), badge: string (short status badge text), q: string (price like "₹ 55"), englishMeaning: string (REQUIRED plain-English gloss of head+sub), tasteNote: string (1 short sentence on the regional taste adaptation, using the local taste cue given above), culturalNote: string (name the SPECIFIC local cultural reference woven into this asset's headline/subheading — a festival, a well-known local idiom/proverb, a regional pop-culture or cricket/cinema reference, or a distinctly local turn of phrase — not just the taste cue) }`;
 
-  const groundingParagraph = `Ground each asset in something SPECIFIC to that exact place and to this exact trigger event — a real local landmark, a region-specific SPICE or FLAVOR habit, or a concrete detail tied to "${eventDescription}" in that city — used only to flavor how the Knorr soup itself is described (e.g. "with a mustard-oil tempering", "curry-leaf aroma"), never to swap in a different food as the thing being sold. Give each asset a genuinely different creative angle and sentence structure — do not reuse the same template (e.g. do not write every headline as "<City>'s winter + Knorr's <soup>, ready in X minutes"); vary whether it leads with weather, a local occasion, a price hook, or a taste callout — all while still being unmistakably an ad for hot Knorr soup. Write natural, benefit-led vernacular ad headlines the way a real LOCAL regional copywriter for that specific city would — evoke warmth, comfort, nutrition, or energy where locally resonant. Give the native-language headline and subheading a fun, playful BOLLYWOOD-STYLE flair — punchy, rhythmic phrasing, a bit of filmy drama or wordplay, the kind of line that could be a movie dialogue or a catchy song hook — rather than a flat, literal, corporate-sounding translation.
+  const groundingParagraph = `Ground each asset in something SPECIFIC to that exact place and to this exact trigger event — a real local landmark, a region-specific SPICE or FLAVOR habit, or a concrete detail tied to "${eventDescription}" in that city — used only to flavor how the Knorr soup itself is described (e.g. "with a mustard-oil tempering", "curry-leaf aroma"), never to swap in a different food as the thing being sold. Give each asset a genuinely different creative angle and sentence structure — do not reuse the same template (e.g. do not write every headline as "<City>'s winter + Knorr's <soup>, ready in X minutes"); vary whether it leads with weather, a local occasion, a price hook, or a taste callout — all while still being unmistakably an ad for hot Knorr soup.
+
+WRITE LIKE A ZOMATO/SWIGGY PUSH NOTIFICATION, NOT A BILLBOARD: think of the short, personalized, witty-with-a-filmy-twist notifications those apps actually send — they talk directly to YOU, tease you, catch you off guard, make you smile in one line — not a formal, descriptive advertisement sentence explaining the weather and the product. Address the reader directly (tu/tumhara/aapka register, not third-person), keep the headline notification-length and punchy (not a full descriptive sentence), and let the subheading carry the specific product/taste detail. The tone should be cheeky, urgent, and fun — a line that could stop someone mid-scroll — never stiff or corporate-sounding.
 
 CULTURAL AUTHENTICITY IS NOT OPTIONAL: a literal translation into the local language/script is NOT enough — each asset must weave in a genuine, verifiable CULTURAL reference specific to that region, not just a flavor cue. Pull from things a real local person would immediately recognize: a regional festival or seasonal occasion actually happening around this time of year in that state, a well-known local idiom/proverb/saying (translated naturally, not word-for-word), a beloved regional cricket/cinema/music reference, or a distinctly local turn of phrase or wordplay that only works in that language. State exactly which reference you used in the culturalNote field so it can be checked — do not leave it vague or generic ("local culture", "regional traditions" are not acceptable answers).
+
+Every headline and subheading MUST read like something a native speaker of that exact language/script would actually write — correct grammar, natural word order, real idiom — never a stiff, word-for-word translation from English. This will be independently checked by a second native-language reviewer after generation, so do not cut corners here.
 
 Do not self-censor or sanitize claims; a separate compliance system reviews this content afterward.`;
 
@@ -1086,10 +1149,16 @@ ${groundingParagraph}`;
       // time) instead of once per variant, which would still allow multiple
       // variants' batches to run concurrently against each other.
       const allVariantAssets = data.variants.flatMap((v: any) => (Array.isArray(v.assets) ? v.assets : []));
-      await attachGeneratedImages(allVariantAssets, eventDescription);
+      await Promise.all([
+        attachGeneratedImages(allVariantAssets, eventDescription),
+        verifyAndFixLocalLanguage(allVariantAssets),
+      ]);
     } else if (Array.isArray(data.assets) && Array.isArray(data.kpis) && data.kpis[1]) {
       data.kpis[1] = [String(data.assets.length), "Regional Versions", "Tailored"];
-      await attachGeneratedImages(data.assets, eventDescription);
+      await Promise.all([
+        attachGeneratedImages(data.assets, eventDescription),
+        verifyAndFixLocalLanguage(data.assets),
+      ]);
     }
     res.json({ success: true, data, provider });
   } catch (err: any) {
