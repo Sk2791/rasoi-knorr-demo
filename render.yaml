@@ -12,8 +12,6 @@ services:
         sync: false
       - key: GROQ_API_KEY
         sync: false
-      - key: XAI_API_KEY
-        sync: false
     # The free plan's filesystem does not survive a redeploy, so rasoi.db
     # (and everything in it — History, banners, presets) resets each time
     # you push a change. To make it persistent:

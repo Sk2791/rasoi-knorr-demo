@@ -630,50 +630,39 @@ async function generateAI(
   throw new Error("No AI provider available (Gemini failed/unset and GROQ_API_KEY not configured).");
 }
 
-function getXaiApiKey(): string | null {
-  return process.env.XAI_API_KEY || null;
-}
-
-// Generates one photorealistic banner background via xAI's Grok image model,
-// grounded in this specific asset's city/flavor. Returns null (never throws)
-// if the key isn't configured or the call fails for any reason — the caller
-// falls back to the bundled stock-photo pool, matching how every other AI
-// call in this app degrades rather than breaking the demo.
+// Generates one photorealistic banner background via Gemini's native image
+// model, grounded in this specific asset's city/flavor. Uses the same
+// GEMINI_API_KEY as text generation — no separate provider/key to configure.
+// (The standalone Imagen `generateImages` API was tried first, but it's only
+// reachable via Vertex AI/Enterprise auth, not a plain Gemini API key — this
+// uses the multimodal `generateContent` path instead, which is.) Returns
+// null (never throws) if the key isn't configured or the call fails for any
+// reason — the caller falls back to the bundled stock-photo pool, matching
+// how every other AI call in this app degrades rather than breaking the demo.
 async function generateAssetImage(prompt: string): Promise<string | null> {
-  const apiKey = getXaiApiKey();
-  if (!apiKey) return null;
-  // Without a hard timeout, a slow/unreachable xAI endpoint would hang this
-  // fetch indefinitely — and since the creative pipeline awaits every asset's
-  // image before responding, one stuck call would stall the ENTIRE run, not
-  // just that one card's photo.
+  const ai = getGeminiClient();
+  if (!ai) return null;
+  // Without a hard timeout, a slow/unreachable endpoint would hang this call
+  // indefinitely — and since the creative pipeline awaits every asset's image
+  // before responding, one stuck call would stall the ENTIRE run, not just
+  // that one card's photo.
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 25000);
   try {
-    const res = await fetch("https://api.x.ai/v1/images/generations", {
-      method: "POST",
-      signal: controller.signal,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
+    const response = await ai.models.generateContent({
+      model: "gemini-3.1-flash-image",
+      contents: prompt,
+      config: {
+        responseModalities: ["IMAGE"],
+        abortSignal: controller.signal,
       },
-      body: JSON.stringify({
-        model: "grok-imagine-image-2.0",
-        prompt,
-        n: 1,
-        // base64 (not a hosted url) so the image is self-contained once
-        // stored — a signed/temporary url would eventually link-rot in History.
-        response_format: "b64_json",
-      }),
     });
-    if (!res.ok) {
-      console.warn(`xAI image generation failed (${res.status}): ${await res.text()}`);
-      return null;
-    }
-    const data = await res.json();
-    const b64 = data.data?.[0]?.b64_json;
-    return b64 ? `data:image/jpeg;base64,${b64}` : null;
+    const parts = response.candidates?.[0]?.content?.parts || [];
+    const imagePart = parts.find((p: any) => p.inlineData?.data);
+    if (!imagePart?.inlineData?.data) return null;
+    return `data:${imagePart.inlineData.mimeType || "image/jpeg"};base64,${imagePart.inlineData.data}`;
   } catch (err: any) {
-    console.warn("xAI image generation error:", err?.name === "AbortError" ? "timed out after 25s" : err?.message || err);
+    console.warn("Gemini image generation error:", err?.name === "AbortError" ? "timed out after 25s" : err?.message || err);
     return null;
   } finally {
     clearTimeout(timeout);
@@ -697,10 +686,10 @@ function buildAssetImagePrompt(
 
 // Fires image-generation calls in small concurrent batches (not all at once)
 // and attaches each result as asset.img. A no-op (near-instant) when
-// XAI_API_KEY isn't set — generateAssetImage returns null immediately without
-// a network call. Batching matters: firing 10+ simultaneous requests at xAI
+// GEMINI_API_KEY isn't set — generateAssetImage returns null immediately
+// without a network call. Batching matters: firing 10+ simultaneous requests
 // under one API key (e.g. 2 variants x 5-6 clusters each) measurably caused
-// individual calls to queue past the 20s timeout and fail — 3 at a time keeps
+// individual calls to queue past the timeout and fail — 3 at a time keeps
 // every request within a normal response window.
 const IMAGE_GEN_CONCURRENCY = 3;
 async function attachGeneratedImages(assets: any[], eventContext: string): Promise<void> {
