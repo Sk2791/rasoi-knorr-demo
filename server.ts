@@ -182,7 +182,7 @@ Return a structured JSON object matching the RASOI trigger schema exactly:
 15. reach: Array of 4 reach strings [Quick commerce pincodes, Kirana outlets, Shakti kits, Language channels]
 16. signals: Array of 5-7 signal objects with { src: string, t: string (headline text), v: number (volume score 50-99), hot?: 1|0 }
 17. verdict: Predicted category offtake summary sentence.
-18. kpis: Array of 6 KPI tuples [[valueStr, labelStr, unitStr]]
+18. kpis: Array of exactly 6 tuples [valueStr, labelStr, unitStr] covering launch speed, regional versions, store reach, governance touches, compute cost, and predicted sales lift — IN THAT ORDER, one tuple per category, no substitutions or reordering. The 6th tuple's labelStr MUST be the exact string "Predicted Sales Lift" (not a paraphrase like "Lift vs Baseline" or "Category Share Gain") and its valueStr MUST be a single percentage consistent with the marketLift range already stated above (item 8) — this is the number a brand manager will later see in the campaign summary, and it must match what they already approved.
 19. assets: Array of 4-5 Knorr soup creative asset objects, one per affected region — every headline/subheading advertises Knorr soup, per the product rule above: { c: string (real cluster code like 'DL','MH','TN','WB','KA','TN'), city: string, lang: string, fmt: string, head: string, sub: string, bg1: string, bg2: string, badge: string, q: string, englishMeaning: string }`;
 
   try {
@@ -382,8 +382,15 @@ app.patch("/api/triggers/:id", (req, res) => {
       if (!unit || !isPureNumber) return valueStr;
       return unit === "%" ? `${valueStr}%` : `${valueStr} ${unit}`;
     };
+    // Prefer the exact "Predicted Sales Lift" label the generation prompts now
+    // require — falls back to the old loose /sales/i match for triggers
+    // generated before that label was standardized, which could otherwise
+    // match the wrong tuple (e.g. a ₹-valued "Incremental Sales" entry).
+    const findSalesLiftKpi = (arr: any[]) =>
+      arr.find((k: any) => /^predicted sales lift$/i.test((k[1] || "").trim())) ||
+      arr.find((k: any) => /sales/i.test(k[1] || ""));
     data.expectedBenefit = {
-      salesLift: formatKpi(kpis.find((k: any) => /sales/i.test(k[1] || ""))),
+      salesLift: formatKpi(findSalesLiftKpi(kpis)),
       turnaround: formatKpi(kpis.find((k: any) => /launch|speed|turnaround/i.test(k[1] || ""))),
       regionsLaunched: assets.length,
       simulatedOrders: totalOrders,
@@ -712,7 +719,9 @@ Region/Context: "${region || 'India'}"
 
 ${PRODUCT_CONSTRAINT}
 
-Generate a structured JSON response matching the RASOI trigger schema exactly. Include:
+Before generating anything, critically judge whether this is a GENUINE, PLAUSIBLE real-world driver of Knorr soup demand in India — a real weather event, festival, cultural occasion, sporting event, or market condition that could realistically spike hot-soup demand. Do NOT be optimistic or charitable toward implausible input. If the event is nonsensical, purely hypothetical/fictional (impossible scenarios, jokes, sci-fi premises), unrelated to India/food/weather/culture/commerce, or too vague to assess, do NOT invent a plausible-sounding scenario to paper over it — instead respond with ONLY this JSON object and nothing else: { "irrelevant": true, "reason": "<one plain-English sentence explaining why this isn't a valid demand trigger>" }
+
+Otherwise, generate a structured JSON response matching the RASOI trigger schema exactly. Include:
 1. name: Short catchy name (e.g. "Heatwave · South India")
 2. meta: Source and timing (e.g. "IMD · 08:00 · Chennai 41°C")
 3. blurb: 1-2 sentence market context summary.
@@ -730,7 +739,7 @@ Generate a structured JSON response matching the RASOI trigger schema exactly. I
 15. reach: Array of 4 reach strings [Quick commerce pincodes, Kirana outlets, Shakti kits, Language channels]
 16. signals: Array of 6-8 signal objects with { src: string, t: string (headline text), v: number (volume score 50-99), hot?: 1|0 }
 17. verdict: Predicted category offtake summary sentence.
-18. kpis: Array of 6 KPI tuples [[valueStr, labelStr, unitStr]]
+18. kpis: Array of exactly 6 tuples [valueStr, labelStr, unitStr] covering launch speed, regional versions, store reach, governance touches, compute cost, and predicted sales lift — IN THAT ORDER, one tuple per category, no substitutions or reordering. The 6th tuple's labelStr MUST be the exact string "Predicted Sales Lift" (not a paraphrase like "Lift vs Baseline" or "Category Share Gain") and its valueStr MUST be a single percentage consistent with the marketLift range already stated above (item 8) — this is the number a brand manager will later see in the campaign summary, and it must match what they already approved.
 19. assets: Array of 5 Knorr soup creative asset objects, one per affected region — every headline/subheading advertises Knorr soup, per the product rule above: { c: string (cluster code like 'DL','MH','TN','WB','PB'), city: string, lang: string, fmt: string, head: string, sub: string, bg1: string, bg2: string, badge: string, q: string, englishMeaning: string, held?: 1 }`;
 
   try {
@@ -739,6 +748,12 @@ Generate a structured JSON response matching the RASOI trigger schema exactly. I
       prompt
     );
     const data = JSON.parse(text);
+    if (data.irrelevant) {
+      return res.status(422).json({
+        success: false,
+        error: data.reason || "This event doesn't appear to be a plausible Knorr soup demand driver.",
+      });
+    }
     if (Array.isArray(data.affectedRegions)) {
       data.affectedRegions = data.affectedRegions.slice(0, 6);
     }
@@ -856,7 +871,7 @@ Generate a structured JSON object with:
 
 // API: SWAAD + ARBITER — taste rationale & commercial opportunity quantification
 app.post("/api/pipeline/opportunity", async (req, res) => {
-  const { eventDescription, region, signals } = req.body;
+  const { eventDescription, region, signals, marketLift } = req.body;
   if (!eventDescription) {
     return res.status(400).json({ error: "Event description is required" });
   }
@@ -869,6 +884,7 @@ app.post("/api/pipeline/opportunity", async (req, res) => {
 Market trigger event: "${eventDescription}"
 Region/Context: "${region || "India"}"
 Live signals detected by SCOUT: ${signalSummary || "N/A"}
+${marketLift ? `This trigger was already assessed with a predicted lift of "${marketLift}" when the brand manager reviewed and approved it — your scores below must stay consistent with that original assessment (an event this same brand manager already judged as, say, high-urgency and high-lift should not now score as low-fit or low-velocity), never contradict it.` : ""}
 
 ${PRODUCT_CONSTRAINT}
 
@@ -891,7 +907,7 @@ Generate a structured JSON object with:
 
 // API: ECHO + MAKER + BHASHA + COMMERCE — consumer verdict, regional creative & reach
 app.post("/api/pipeline/creative", async (req, res) => {
-  const { eventDescription, region, opp, scores, affectedClusters, variantCount } = req.body;
+  const { eventDescription, region, opp, scores, affectedClusters, variantCount, marketLift } = req.body;
   if (!eventDescription) {
     return res.status(400).json({ error: "Event description is required" });
   }
@@ -938,7 +954,7 @@ ${clusterBrief}
 
 Generate a structured JSON object with:
 1. verdict: A 1-sentence predicted category offtake summary, prefixed with "✓".
-2. kpis: Array of exactly 6 tuples [valueStr, labelStr, unitStr] covering launch speed, regional versions, store reach, governance touches, compute cost, and predicted sales lift. The launch speed / turnaround KPI is THE core value proposition of this product (AI-generated regional campaigns in minutes instead of an agency's weeks) — it MUST be a small number of minutes (e.g. "4", "min") or at most hours, NEVER days or weeks; a multi-day figure would contradict the entire pitch of this tool.
+2. kpis: Array of exactly 6 tuples [valueStr, labelStr, unitStr] covering launch speed, regional versions, store reach, governance touches, compute cost, and predicted sales lift — IN THAT ORDER, no substitutions or reordering. The launch speed / turnaround KPI is THE core value proposition of this product (AI-generated regional campaigns in minutes instead of an agency's weeks) — it MUST be a small number of minutes (e.g. "4", "min") or at most hours, NEVER days or weeks; a multi-day figure would contradict the entire pitch of this tool. The 6th tuple's labelStr MUST be the exact string "Predicted Sales Lift" (not a paraphrase). ${marketLift ? `Its valueStr MUST stay consistent with the "${marketLift}" figure the brand manager already saw and approved for this trigger — pick a single value within (or a close refinement of) that same range, never an unrelated new number; the final campaign summary is built from this KPI, so contradicting the original figure would visibly undermine the brand manager's trust in these numbers.` : ""}
 ${outputSpec}
 
 ${groundingParagraph}`;

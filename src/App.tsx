@@ -582,6 +582,10 @@ export default function App() {
       eventDescription,
       region,
       signals: liveSignals || activeTrigger.signals,
+      // Anchors ARBITER's scores to what the brand manager already saw and
+      // acted on when reviewing this trigger, instead of an independent
+      // fresh guess that could silently contradict it.
+      marketLift: activeTrigger.marketLift,
     });
     if (isKilledRef.current) return;
 
@@ -621,6 +625,11 @@ export default function App() {
       opp: liveOpp,
       scores: liveScores,
       affectedClusters,
+      // Same anchor as the opportunity call — the "Predicted Sales Lift" KPI
+      // generated below ends up as the run's expectedBenefit.salesLift, so it
+      // must stay consistent with the number shown when this trigger was
+      // reviewed, not silently diverge into an unrelated figure.
+      marketLift: activeTrigger.marketLift,
       // 2 rather than 3 — still satisfies "2-3 options," but keeps the JSON
       // response small enough that Groq's fallback reliably produces valid
       // JSON for it (a 3-variant response was measurably more likely to
