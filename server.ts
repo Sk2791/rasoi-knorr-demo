@@ -543,22 +543,36 @@ async function callGroq(systemInstruction: string, userContent: string, jsonMode
   const apiKey = getGroqApiKey();
   if (!apiKey) throw new Error("GROQ_API_KEY not configured");
 
-  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: GROQ_MODEL,
-      messages: [
-        { role: "system", content: systemInstruction },
-        { role: "user", content: userContent },
-      ],
-      ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
-      temperature: 0.9,
-    }),
-  });
+  // No timeout here meant a slow/hung Groq response could stall the ENTIRE
+  // pipeline indefinitely with zero feedback — this is the last-resort
+  // fallback provider, so it failing fast (and surfacing to the cached
+  // fallback path) is far better than the run silently never finishing.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 25000);
+  let res: Response;
+  try {
+    res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: GROQ_MODEL,
+        messages: [
+          { role: "system", content: systemInstruction },
+          { role: "user", content: userContent },
+        ],
+        ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
+        temperature: 0.9,
+      }),
+    });
+  } catch (err: any) {
+    throw new Error(err?.name === "AbortError" ? "Groq API timed out after 25s" : `Groq API error: ${err?.message || err}`);
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!res.ok) {
     const errText = await res.text();
