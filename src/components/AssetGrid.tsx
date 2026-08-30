@@ -12,6 +12,7 @@ import {
   Wand2,
   ThumbsUp,
   ThumbsDown,
+  Landmark,
 } from "lucide-react";
 
 interface AssetGridProps {
@@ -525,16 +526,16 @@ const BoldHeadlineArt: React.FC<LayoutProps> = ({ a, palette, theme, gradId, pat
       ) : (
         <rect width="280" height="160" fill={`url(#${gradId})`} />
       )}
-      <BackgroundPattern theme={theme} patternId={patternId} />
+      {/* Pattern, pack mark and theme icon are all redundant clutter over a
+          real, specific photo that already conveys the theme — only useful
+          as decoration on a generic gradient/stock background. */}
+      {!a.img && <BackgroundPattern theme={theme} patternId={patternId} />}
       {hasPhoto ? (
         <BottomScrim id={`${gradId}-scrim`} y={70} height={90} />
       ) : (
         <LandmarkIcon clusterCode={a.c} x={195} y={112} scale={2.2} />
       )}
-      <ProductPackMark x={244} y={118} />
-      {/* Redundant clutter over a real, specific photo that already conveys
-          the theme — only useful as a decorative motif on a generic
-          gradient/stock background. */}
+      {!a.img && <ProductPackMark x={244} y={118} />}
       {!a.img && <ThemeIcon theme={theme} cx={225} cy={40} />}
       <WrappedText text={a.head} x={16} y={98} fontSize={16} maxChars={20} lineHeight={19} />
       <text x="16" y="130" fontSize="9.5" fontWeight="500" fill="#ffffff" opacity="0.92">
@@ -572,10 +573,10 @@ const SplitVisualArt: React.FC<LayoutProps> = ({ a, palette, theme, gradId, patt
       ) : (
         <rect width="280" height="92" fill={`url(#${gradId})`} />
       )}
-      <BackgroundPattern theme={theme} patternId={patternId} />
+      {!a.img && <BackgroundPattern theme={theme} patternId={patternId} />}
       {!hasPhoto && <LandmarkIcon clusterCode={a.c} x={155} y={86} scale={1.6} />}
       <rect y="92" width="280" height="68" fill={palette[0]} />
-      <ProductPackMark x={16} y={40} scale={0.9} />
+      {!a.img && <ProductPackMark x={16} y={40} scale={0.9} />}
       {!a.img && <ThemeIcon theme={theme} cx={236} cy={44} scale={1.15} />}
       <WrappedText text={a.head} x={16} y={122} fontSize={14} maxChars={24} lineHeight={16} anchor="start" />
       <text x="16" y="148" fontSize="9" fontWeight="500" fill="#ffffff" opacity="0.85">
@@ -603,13 +604,13 @@ const MinimalBadgeArt: React.FC<LayoutProps> = ({ a, palette, theme, gradId, pat
     ) : (
       <rect width="280" height="160" fill={palette[0]} />
     )}
-    <BackgroundPattern theme={theme} patternId={patternId} />
+    {!a.img && <BackgroundPattern theme={theme} patternId={patternId} />}
     {hasPhoto ? (
       <BottomScrim id={`${gradId}-scrim`} y={70} height={90} opacity={0.5} />
     ) : (
       <LandmarkIcon clusterCode={a.c} x={140} y={155} scale={2.4} opacity={0.16} />
     )}
-    <ProductPackMark x={20} y={130} scale={0.85} />
+    {!a.img && <ProductPackMark x={20} y={130} scale={0.85} />}
     {!a.img && (
       <>
         <circle cx="140" cy="44" r="27" fill={palette[1]} opacity="0.22" />
@@ -686,6 +687,7 @@ export const AssetGrid: React.FC<AssetGridProps> = ({
                 sub: data.asset.sub || a.sub,
                 englishMeaning: data.asset.englishMeaning || a.englishMeaning,
                 tasteNote: data.asset.tasteNote || a.tasteNote,
+                culturalNote: data.asset.culturalNote || a.culturalNote,
                 badge: data.asset.badge || a.badge,
                 img: data.asset.img || a.img,
               }
@@ -852,6 +854,18 @@ export const AssetGrid: React.FC<AssetGridProps> = ({
                     </div>
                     <p className="text-slate-300 text-[11px] mt-0.5 leading-snug">
                       {a.tasteNote}
+                    </p>
+                  </div>
+                )}
+
+                {a.culturalNote && (
+                  <div>
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                      <Landmark className="w-3 h-3 text-sky-400" />
+                      Cultural Reference
+                    </div>
+                    <p className="text-slate-300 text-[11px] mt-0.5 leading-snug">
+                      {a.culturalNote}
                     </p>
                   </div>
                 )}

@@ -309,12 +309,15 @@ ${
 
 Give the native-language headline and subheading a fun, playful BOLLYWOOD-STYLE flair — punchy, rhythmic phrasing, a bit of filmy drama or wordplay — rather than a flat, literal, corporate-sounding translation.
 
+CULTURAL AUTHENTICITY IS NOT OPTIONAL: a literal translation is NOT enough — weave in a genuine, verifiable CULTURAL reference specific to this region, not just a flavor cue: a regional festival/seasonal occasion actually relevant now, a well-known local idiom/proverb, a beloved regional cricket/cinema/music reference, or a distinctly local turn of phrase. Name exactly which reference you used — "local culture" or "regional traditions" are not acceptable answers.
+
 Generate a structured JSON object with:
 1. head: headline written IN the local language/script (${lang})
 2. sub: subheading in the same local language/script
 3. englishMeaning: a faithful, literal English translation of the NEW head+sub
 4. tasteNote: 1 short sentence on the regional taste adaptation
-5. badge: short status badge text (e.g. "Live · Fresh Take")`;
+5. culturalNote: name the SPECIFIC local cultural reference woven into the headline/subheading
+6. badge: short status badge text (e.g. "Live · Fresh Take")`;
 
   try {
     const { text, provider } = await generateAI(
@@ -335,6 +338,7 @@ Generate a structured JSON object with:
         sub: data.sub,
         englishMeaning: data.englishMeaning,
         tasteNote: data.tasteNote,
+        culturalNote: data.culturalNote,
         badge: data.badge || "Live · Fresh Take",
         ...(img ? { img } : {}),
       },
@@ -443,6 +447,9 @@ app.get("/api/banners", (req, res) => {
         badge: asset.badge,
         held: asset.held,
         orderCount: asset.orderCount || 0,
+        img: asset.img,
+        culturalNote: asset.culturalNote,
+        tasteNote: asset.tasteNote,
       });
     }
   }
@@ -1044,9 +1051,13 @@ app.post("/api/pipeline/creative", async (req, res) => {
     .map((cl) => `- Code "${cl.c}" — ${cl.n}, language ${cl.lang}. Local taste cue: ${cl.tasteSummary || cl.note}.`)
     .join("\n");
 
-  const assetShape = `{ c: string (the exact cluster code given above), city: string (a real specific city within that cluster), lang: string (the exact language given above, e.g. "Hindi (hi-IN)"), fmt: string (ad format e.g. "1:1 Quick Feed", "9:16 Reel"), head: string (headline written IN the local language/script), sub: string (subheading in local language), badge: string (short status badge text), q: string (price like "₹ 55"), englishMeaning: string (REQUIRED plain-English gloss of head+sub), tasteNote: string (1 short sentence on the regional taste adaptation, using the local taste cue given above) }`;
+  const assetShape = `{ c: string (the exact cluster code given above), city: string (a real specific city within that cluster), lang: string (the exact language given above, e.g. "Hindi (hi-IN)"), fmt: string (ad format e.g. "1:1 Quick Feed", "9:16 Reel"), head: string (headline written IN the local language/script), sub: string (subheading in local language), badge: string (short status badge text), q: string (price like "₹ 55"), englishMeaning: string (REQUIRED plain-English gloss of head+sub), tasteNote: string (1 short sentence on the regional taste adaptation, using the local taste cue given above), culturalNote: string (name the SPECIFIC local cultural reference woven into this asset's headline/subheading — a festival, a well-known local idiom/proverb, a regional pop-culture or cricket/cinema reference, or a distinctly local turn of phrase — not just the taste cue) }`;
 
-  const groundingParagraph = `Ground each asset in something SPECIFIC to that exact place and to this exact trigger event — a real local landmark, a region-specific SPICE or FLAVOR habit, or a concrete detail tied to "${eventDescription}" in that city — used only to flavor how the Knorr soup itself is described (e.g. "with a mustard-oil tempering", "curry-leaf aroma"), never to swap in a different food as the thing being sold. Give each asset a genuinely different creative angle and sentence structure — do not reuse the same template (e.g. do not write every headline as "<City>'s winter + Knorr's <soup>, ready in X minutes"); vary whether it leads with weather, a local occasion, a price hook, or a taste callout — all while still being unmistakably an ad for hot Knorr soup. Write natural, benefit-led vernacular ad headlines the way a real LOCAL regional copywriter for that specific city would — evoke warmth, comfort, nutrition, or energy where locally resonant. Give the native-language headline and subheading a fun, playful BOLLYWOOD-STYLE flair — punchy, rhythmic phrasing, a bit of filmy drama or wordplay, the kind of line that could be a movie dialogue or a catchy song hook — rather than a flat, literal, corporate-sounding translation. Do not self-censor or sanitize claims; a separate compliance system reviews this content afterward.`;
+  const groundingParagraph = `Ground each asset in something SPECIFIC to that exact place and to this exact trigger event — a real local landmark, a region-specific SPICE or FLAVOR habit, or a concrete detail tied to "${eventDescription}" in that city — used only to flavor how the Knorr soup itself is described (e.g. "with a mustard-oil tempering", "curry-leaf aroma"), never to swap in a different food as the thing being sold. Give each asset a genuinely different creative angle and sentence structure — do not reuse the same template (e.g. do not write every headline as "<City>'s winter + Knorr's <soup>, ready in X minutes"); vary whether it leads with weather, a local occasion, a price hook, or a taste callout — all while still being unmistakably an ad for hot Knorr soup. Write natural, benefit-led vernacular ad headlines the way a real LOCAL regional copywriter for that specific city would — evoke warmth, comfort, nutrition, or energy where locally resonant. Give the native-language headline and subheading a fun, playful BOLLYWOOD-STYLE flair — punchy, rhythmic phrasing, a bit of filmy drama or wordplay, the kind of line that could be a movie dialogue or a catchy song hook — rather than a flat, literal, corporate-sounding translation.
+
+CULTURAL AUTHENTICITY IS NOT OPTIONAL: a literal translation into the local language/script is NOT enough — each asset must weave in a genuine, verifiable CULTURAL reference specific to that region, not just a flavor cue. Pull from things a real local person would immediately recognize: a regional festival or seasonal occasion actually happening around this time of year in that state, a well-known local idiom/proverb/saying (translated naturally, not word-for-word), a beloved regional cricket/cinema/music reference, or a distinctly local turn of phrase or wordplay that only works in that language. State exactly which reference you used in the culturalNote field so it can be checked — do not leave it vague or generic ("local culture", "regional traditions" are not acceptable answers).
+
+Do not self-censor or sanitize claims; a separate compliance system reviews this content afterward.`;
 
   const outputSpec =
     numVariants > 1
@@ -1184,6 +1195,69 @@ Requirements for suggestedRewrite:
       rationale: `The generated headline for ${flaggedAsset.city} references "${matchedPhrase}", which is a regulated nutrient/health claim under Indian food law.`,
       suggestedRewrite: buildFallbackRewrite(flaggedAsset),
     });
+  }
+});
+
+// API: LINK-INSPIRED AD EFFECTIVENESS SCORE — an AI-simulated approximation
+// of the dimensions a real ad pre-testing service (e.g. Kantar Link) measures
+// via live consumer panels. This is NOT real panel data or a real normative
+// database — it's an LLM's critical judgment, and must be labeled as such
+// everywhere it's surfaced so it's never mistaken for validated research.
+app.post("/api/pipeline/linkscore", async (req, res) => {
+  const { assets, eventDescription } = req.body;
+  if (!Array.isArray(assets) || assets.length === 0) {
+    return res.status(400).json({ error: "assets array is required" });
+  }
+
+  const sample = assets.slice(0, 6);
+  const assetSummary = sample
+    .map(
+      (a: any, i: number) =>
+        `${i + 1}. [${a.city}] "${a.head}" / "${a.sub}" — English: "${a.englishMeaning || ""}" — Cultural reference stated: ${a.culturalNote || "none stated"}`
+    )
+    .join("\n");
+
+  const prompt = `You are an independent ad-effectiveness evaluator modeling the same dimensions industry pre-testing frameworks (e.g. Kantar Link) measure via live consumer panels — Branding, Communication, Cultural Resonance, Cut-Through, and Persuasion. You do NOT have real panel data; give your best expert judgment as a rigorous, skeptical FMCG marketing evaluator, not a cheerleader. Be honest about weaknesses — generic, templated, or thinly-localized copy should score LOWER, not be rounded up out of politeness.
+
+Market trigger event: "${eventDescription || "A regional demand campaign"}"
+
+Generated regional ad assets to evaluate (sample of ${sample.length} of ${assets.length} total):
+${assetSummary}
+
+Score each dimension 0-100 and give an overall percentile (0-100) versus a realistic FMCG soup/snack category norm — a genuinely excellent, highly differentiated execution might land in the 80s-90s, an average one in the 40s-60s, a weak/generic one below 40. Do not default to high scores.
+
+Generate a structured JSON object with:
+1. branding: number (0-100) — is the Knorr brand and product clearly, correctly represented?
+2. communication: number (0-100) — is the core message (hot soup, ready fast, fits this moment) clear?
+3. culturalResonance: number (0-100) — does this feel like genuine local cultural insight, or just translated English copy? Be strict: a real NAMED cultural reference scores meaningfully higher than a generic taste/flavor mention alone, and "none stated" should score low.
+4. cutThrough: number (0-100) — distinctive enough to stand out from category clutter, or forgettable/templated?
+5. persuasion: number (0-100) — does this plausibly move someone to actually try/buy?
+6. overallPercentile: number (0-100) — your holistic percentile estimate vs a realistic category norm
+7. rationale: 1-2 sentences on what's working and what's weak, specific to these assets`;
+
+  try {
+    const { text, provider } = await generateAI(
+      "Return valid JSON for an AI-simulated Link-inspired ad effectiveness evaluation.",
+      prompt
+    );
+    const data = JSON.parse(text);
+    const clamp = (n: any) => Math.max(0, Math.min(100, Math.round(Number(n) || 0)));
+    res.json({
+      success: true,
+      linkScore: {
+        branding: clamp(data.branding),
+        communication: clamp(data.communication),
+        culturalResonance: clamp(data.culturalResonance),
+        cutThrough: clamp(data.cutThrough),
+        persuasion: clamp(data.persuasion),
+        overallPercentile: clamp(data.overallPercentile),
+        rationale: data.rationale || "",
+      },
+      provider,
+    });
+  } catch (err: any) {
+    console.warn("Link-inspired scoring call failed:", err?.message || err);
+    res.json({ success: false });
   }
 });
 

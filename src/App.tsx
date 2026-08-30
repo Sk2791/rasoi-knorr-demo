@@ -29,6 +29,7 @@ import {
   AppNotification,
   CreativeVariant,
   UserRole,
+  LinkScore,
 } from "./types";
 import { CLUSTERS, AGENTS, GUARDS, ASSETS } from "./data/mockData";
 import { deriveEventTheme } from "./lib/theme";
@@ -376,6 +377,7 @@ export default function App() {
     kpis: Array<[string, string, string]>;
     assets: Asset[];
     provider: string | null;
+    linkScore?: LinkScore;
   }) => {
     if (!currentTriggerId) {
       setScreen("summary");
@@ -439,6 +441,14 @@ export default function App() {
   // the compliance scan and finalizes the trigger. Split out from
   // handleRunSimulation so handleSelectVariant can resume the pipeline here
   // after a pause for the variant-choice step.
+  // AI-simulated approximation of the dimensions a real ad pre-testing
+  // service (e.g. Kantar Link) measures via live consumer panels — NOT real
+  // panel data. Never blocks finalization if it fails.
+  const fetchLinkScore = async (assets: Asset[], eventDescription: string): Promise<LinkScore | undefined> => {
+    const res = await postJSON("/api/pipeline/linkscore", { assets, eventDescription });
+    return res.success ? res.linkScore : undefined;
+  };
+
   const runSentinelAndFinalize = async (
     finalAssets: Asset[],
     finalVerdict: string,
@@ -504,11 +514,14 @@ export default function App() {
       setSimProgressStep(4);
       if (timerRef.current) clearInterval(timerRef.current);
 
+      const linkScore = await fetchLinkScore(finalAssets, activeTrigger.blurb || activeTrigger.name);
+
       finalizeTrigger({
         verdict: finalVerdict,
         kpis: finalKpis,
         assets: finalAssets,
         provider: finalProviderLabel,
+        linkScore,
       });
     }
   };
@@ -694,7 +707,7 @@ export default function App() {
   };
 
   // Brand Manager resolves the held claim
-  const handleApproveWithSuggestedEdit = () => {
+  const handleApproveWithSuggestedEdit = async () => {
     setIsGateActive(false);
     setIsSentinelModalOpen(false);
 
@@ -735,10 +748,11 @@ export default function App() {
     setSimProgressStep(4);
     if (timerRef.current) clearInterval(timerRef.current);
 
-    finalizeTrigger({ verdict: verdictText, kpis: kpiTriples, assets: updatedAssets, provider: providerLabel });
+    const linkScore = await fetchLinkScore(updatedAssets, activeTrigger.blurb || activeTrigger.name);
+    finalizeTrigger({ verdict: verdictText, kpis: kpiTriples, assets: updatedAssets, provider: providerLabel, linkScore });
   };
 
-  const handleApproveOriginalOverride = () => {
+  const handleApproveOriginalOverride = async () => {
     setIsGateActive(false);
     setIsSentinelModalOpen(false);
 
@@ -751,10 +765,11 @@ export default function App() {
     setSimProgressStep(4);
     if (timerRef.current) clearInterval(timerRef.current);
 
-    finalizeTrigger({ verdict: verdictText, kpis: kpiTriples, assets: currentAssets, provider: providerLabel });
+    const linkScore = await fetchLinkScore(currentAssets, activeTrigger.blurb || activeTrigger.name);
+    finalizeTrigger({ verdict: verdictText, kpis: kpiTriples, assets: currentAssets, provider: providerLabel, linkScore });
   };
 
-  const handleRejectAd = () => {
+  const handleRejectAd = async () => {
     setIsGateActive(false);
     setIsSentinelModalOpen(false);
 
@@ -767,7 +782,8 @@ export default function App() {
     setSimProgressStep(4);
     if (timerRef.current) clearInterval(timerRef.current);
 
-    finalizeTrigger({ verdict: verdictText, kpis: kpiTriples, assets: currentAssets, provider: providerLabel });
+    const linkScore = await fetchLinkScore(currentAssets, activeTrigger.blurb || activeTrigger.name);
+    finalizeTrigger({ verdict: verdictText, kpis: kpiTriples, assets: currentAssets, provider: providerLabel, linkScore });
   };
 
   // -------------------------------------------------------------------

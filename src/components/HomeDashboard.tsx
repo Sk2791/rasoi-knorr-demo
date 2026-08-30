@@ -96,6 +96,9 @@ function bannerToAsset(b: BannerRecord): Asset {
     q: "₹ 55",
     held: b.held,
     englishMeaning: b.englishMeaning,
+    img: b.img,
+    culturalNote: b.culturalNote,
+    tasteNote: b.tasteNote,
   };
 }
 

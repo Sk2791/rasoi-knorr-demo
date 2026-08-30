@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { X, CheckCircle2, XCircle, TrendingUp, ShieldCheck } from "lucide-react";
+import { X, CheckCircle2, XCircle, TrendingUp, ShieldCheck, Gauge } from "lucide-react";
 import { Asset, TriggerRecord } from "../types";
 import { deriveEventTheme } from "../lib/theme";
 import { AssetGrid } from "./AssetGrid";
@@ -78,6 +78,15 @@ export const CampaignDetailModal: React.FC<CampaignDetailModalProps> = ({ trigge
               <span className="text-xs font-semibold text-slate-300 bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700">
                 {trigger.expectedBenefit.regionsLaunched} regions launched
               </span>
+              {trigger.runResult?.linkScore && (
+                <span
+                  className="flex items-center gap-1.5 text-xs font-bold text-sky-300 bg-sky-500/10 border border-sky-500/30 px-3 py-1.5 rounded-full"
+                  title="AI-simulated approximation, not real Kantar Link panel data"
+                >
+                  <Gauge className="w-3.5 h-3.5" />
+                  Link Score: {trigger.runResult.linkScore.overallPercentile}/100
+                </span>
+              )}
             </div>
           )}
 

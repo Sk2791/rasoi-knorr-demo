@@ -18,6 +18,10 @@ export interface Asset {
   q: string;
   held?: number;
   tasteNote?: string;
+  // Names the specific local cultural reference (festival, idiom, cricket/
+  // cinema reference, etc.) woven into head/sub — this app's answer to
+  // "cultural authenticity, not just dialect translation."
+  culturalNote?: string;
   englishMeaning?: string;
   suggestedEdit?: string;
   suggestedEnglish?: string;
@@ -129,6 +133,20 @@ export interface ExpectedBenefit {
   simulatedOrders: number;
 }
 
+// An AI-simulated approximation of the dimensions a real ad pre-testing
+// service (e.g. Kantar Link) measures via live consumer panels — NOT actual
+// panel data. Useful as a directional quality signal, not a substitute for
+// real pre-testing.
+export interface LinkScore {
+  branding: number; // 0-100: is the product/brand clearly, correctly represented?
+  communication: number; // 0-100: does the copy convey the intended message clearly?
+  culturalResonance: number; // 0-100: does it feel locally authentic, not just translated?
+  cutThrough: number; // 0-100: distinctive enough to stand out from category clutter?
+  persuasion: number; // 0-100: does it plausibly drive intent to try/buy?
+  overallPercentile: number; // 0-100: simulated percentile vs a category norm
+  rationale: string; // 1-2 sentences explaining the scores
+}
+
 export interface RunResult {
   verdict: string;
   kpis: Array<[string, string, string]>;
@@ -137,6 +155,7 @@ export interface RunResult {
   // The full set of creative directions MAKER generated, kept for audit —
   // assets above is just whichever one the brand manager picked.
   variants?: CreativeVariant[];
+  linkScore?: LinkScore;
 }
 
 export interface TriggerRecord extends Trigger {
@@ -163,6 +182,9 @@ export interface BannerRecord {
   badge: string;
   held?: number;
   orderCount: number;
+  img?: string;
+  culturalNote?: string;
+  tasteNote?: string;
 }
 
 export interface ChatMessage {

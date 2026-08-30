@@ -1,6 +1,17 @@
 import React from "react";
-import { CheckCircle2, ShieldCheck, TrendingUp, MapPin, ShoppingCart, Clock, ArrowLeft } from "lucide-react";
+import { CheckCircle2, ShieldCheck, TrendingUp, MapPin, ShoppingCart, Clock, ArrowLeft, Gauge } from "lucide-react";
 import { TriggerRecord } from "../types";
+
+const LINK_DIMENSIONS: Array<{ key: "branding" | "communication" | "culturalResonance" | "cutThrough" | "persuasion"; label: string }> = [
+  { key: "branding", label: "Branding" },
+  { key: "communication", label: "Communication" },
+  { key: "culturalResonance", label: "Cultural Resonance" },
+  { key: "cutThrough", label: "Cut-Through" },
+  { key: "persuasion", label: "Persuasion" },
+];
+
+const scoreColor = (n: number) => (n >= 70 ? "text-emerald-400" : n >= 45 ? "text-amber-400" : "text-red-400");
+const barColor = (n: number) => (n >= 70 ? "bg-emerald-500" : n >= 45 ? "bg-amber-500" : "bg-red-500");
 
 interface RunSummaryScreenProps {
   trigger: TriggerRecord;
@@ -72,6 +83,45 @@ export const RunSummaryScreen: React.FC<RunSummaryScreenProps> = ({ trigger, onB
         {trigger.runResult?.verdict && (
           <div className="bg-slate-900/40 border border-green-500/20 rounded-2xl p-4 mb-6 text-sm text-green-300 leading-relaxed">
             {trigger.runResult.verdict}
+          </div>
+        )}
+
+        {trigger.runResult?.linkScore && (
+          <div className="bg-slate-900/60 border border-sky-500/30 rounded-2xl p-4 mb-6">
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-sky-300 uppercase tracking-wider">
+                <Gauge className="w-3.5 h-3.5" />
+                Link-Inspired Ad Effectiveness Score
+              </div>
+              <div className={`text-lg font-extrabold ${scoreColor(trigger.runResult.linkScore.overallPercentile)}`}>
+                {trigger.runResult.linkScore.overallPercentile}
+                <span className="text-xs text-slate-500 font-semibold">/100</span>
+              </div>
+            </div>
+            <p className="text-[10px] text-slate-500 mb-3">
+              AI-simulated approximation of the dimensions industry ad pre-testing frameworks (e.g. Kantar Link) measure via live consumer panels — this is a directional estimate, not real panel data.
+            </p>
+            <div className="space-y-2 mb-3">
+              {LINK_DIMENSIONS.map((d) => {
+                const val = trigger.runResult!.linkScore![d.key];
+                return (
+                  <div key={d.key}>
+                    <div className="flex items-center justify-between text-[11px] mb-0.5">
+                      <span className="text-slate-400 font-medium">{d.label}</span>
+                      <span className={`font-bold ${scoreColor(val)}`}>{val}</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                      <div className={`h-full rounded-full ${barColor(val)}`} style={{ width: `${val}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {trigger.runResult.linkScore.rationale && (
+              <p className="text-xs text-slate-300 leading-relaxed border-t border-slate-800 pt-2.5">
+                {trigger.runResult.linkScore.rationale}
+              </p>
+            )}
           </div>
         )}
 
